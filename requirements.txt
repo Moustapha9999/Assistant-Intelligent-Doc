@@ -1,0 +1,47 @@
+# Dépendances principales
+python-dotenv
+
+# Collecte des données
+requests
+PyGithub
+beautifulsoup4
+lxml
+
+# Traitement des données
+pandas
+numpy
+markdow
+
+
+# Embeddings & Vector DB (Représentations vectorielles et base de données vectorielles)
+sentence-transformers
+qdrant-client
+
+# LLM & RAG
+langchain
+langchain-community
+openai
+anthropic
+
+
+# Retrieval
+rank-bm25
+
+# Évaluation
+ragas
+datasets
+
+
+# Interface Web
+streamlit
+
+# Utilitaires
+pyyaml
+tqdm
+python-dateutil
+
+# Développement
+pytest
+black
+flake8
+
