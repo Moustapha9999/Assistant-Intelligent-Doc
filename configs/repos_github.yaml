@@ -1,0 +1,34 @@
+
+# Configuration des critères de sélection des repos GitHub
+
+criteres_selection:  
+  min_stars: 250
+  max_repos_par_langage: 125  
+  langages:  
+    - Python
+    - JavaScript
+    - Java
+    - C
+    - C++
+  max_age_mois: 12  
+  doit_avoir_readme: true  
+  exclure_forks: true   
+  exclure_archives: true  
+
+# Topics préférés
+topics_preferes:
+  - api
+  - web
+  - framework
+  - machine-learning
+  - data-science
+  - devtools
+  - cli
+  - library
+  - backend
+  - frontend
+
+# Exclusions
+repos_exclus:
+  - awesome-lists
+  - documentation-only
