@@ -3,7 +3,7 @@
 
 criteres_selection:  
   min_stars: 250
-  max_repos_par_langage: 125  
+  max_repos_par_langage: 10 
   langages:  
     - Python
     - JavaScript

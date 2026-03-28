@@ -125,7 +125,7 @@ class SelecteurRepo:
             
             compteur_selection = 0
 
-            for repo in resultats:
+            for position, repo in enumerate(resultats, start=1):
                 if compteur_selection >= max_par_langage:
                     break
 
@@ -135,6 +135,7 @@ class SelecteurRepo:
                 if self.filtrer_repo(repo):
                     infos_repo = {
 
+                        'rang_dans_recherche': position,
                         'nom_complet': repo.full_name,
                         'nom': repo.name,
                         'proprietaire': repo.owner.login,
@@ -148,16 +149,15 @@ class SelecteurRepo:
 
                     }
 
-                    
 
                     all_selection.append(infos_repo)
                     compteur_selection += 1
-                    print(f"   ✅ {repo.full_name} ({repo.stargazers_count} ⭐)")
+                    print(f"   [{position}] {repo.full_name} ({repo.stargazers_count} ⭐)")
 
         
 
         self.repos_selectionnes = all_selection
-        print(f"\n✨ Total des repos sélectionnés : {len(all_selection)} repos")
+        print(f"\n--> Total des repos sélectionnés : {len(all_selection)} repos")
         return all_selection
 
     
@@ -171,7 +171,7 @@ class SelecteurRepo:
          yaml.dump(self.repos_selectionnes, f, allow_unicode=True, default_flow_style=False)
 
         
-        print(f"\n Liste sauvegardée dans : {chemin_sortie}")
+        print(f"\n Liste des repos sauvegardée dans : {chemin_sortie}")
 
 
 
