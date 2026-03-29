@@ -1,0 +1,15 @@
+# Configuration Qdrant
+
+collection:
+  name: github_docs
+  vector_params:
+    size: 384  # Dimension all-MiniLM-L6-v2
+    distance: COSINE
+
+indexing:
+  batch_size: 100
+  optimize_after: true
+
+search:
+  default_limit: 5
+  score_threshold: 0.5
