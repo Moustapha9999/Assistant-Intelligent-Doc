@@ -10,7 +10,7 @@ lxml
 # Traitement des données
 pandas
 numpy
-markdow
+markdown
 
 
 # Embeddings & Vector DB (Représentations vectorielles et base de données vectorielles)

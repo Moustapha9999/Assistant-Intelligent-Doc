@@ -7,6 +7,9 @@ env/
 venv/
 ENV/
 build/
+.idea/
+cache_huggingface/
+resultats/
 develop-eggs/
 dist/
 downloads/
@@ -22,11 +25,13 @@ wheels/
 .installed.cfg
 *.egg
 
+.env
+models_cache/
+
 # Jupyter Notebook
 .ipynb_checkpoints
 
 # Environment variables
-.env
 .env.example
 .env.local
 
