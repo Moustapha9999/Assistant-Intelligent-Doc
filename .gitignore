@@ -27,6 +27,7 @@ wheels/
 
 # Environment variables
 .env
+.env.example
 .env.local
 
 # Data (trop volumineux pour GitHub)
