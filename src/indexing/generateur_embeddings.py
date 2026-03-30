@@ -21,7 +21,7 @@ class GenerateurEmbeddings:
         """
         print(f" A- Chargement du modèle {nom_modele}...")
         
-        # FIX : Désactiver la vérification SSL (temporaire pour développement)
+        # FIX : Désactiver la vérification SSL (temporaire pour le développement)
         import ssl
         ssl._create_default_https_context = ssl._create_unverified_context
         
