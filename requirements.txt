@@ -22,10 +22,15 @@ langchain
 langchain-community
 openai
 anthropic
-
+groq
+langchain-groq
 
 # Retrieval
 rank-bm25
+sentence-transformerss
+
+
+
 
 # Évaluation
 ragas
@@ -44,4 +49,5 @@ python-dateutil
 pytest
 black
 flake8
+
 
