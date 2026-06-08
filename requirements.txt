@@ -1,53 +1,48 @@
-# Dépendances principales
+
+# ── Environnement ──────────────────────────────────────
 python-dotenv
 
-# Collecte des données
+# ── Collecte des données ───────────────────────────────
 requests
 PyGithub
 beautifulsoup4
 lxml
 
-# Traitement des données
+# ── Traitement des données ─────────────────────────────
 pandas
 numpy
 markdown
 
-
-# Embeddings & Vector DB (Représentations vectorielles et base de données vectorielles)
+# ── Embeddings & Base vectorielle ─────────────────────
 sentence-transformers
 qdrant-client
 
-# LLM & RAG
+# ── LLM & Orchestration ───────────────────────────────
 langchain
 langchain-community
+langchain-groq
+langchain-huggingface
 openai
 anthropic
 groq
-langchain-groq
 
-# Retrieval
+# ── Retrieval hybride ──────────────────────────────────
 rank-bm25
-sentence-transformerss
 
-
-
-
-# Évaluation
+# ── Évaluation RAGAS ──────────────────────────────────
 ragas
 datasets
 
-
-# Interface Web
+# ── Interface Web ──────────────────────────────────────
 streamlit
 
-# Utilitaires
+# ── Utilitaires ───────────────────────────────────────
 pyyaml
 tqdm
 python-dateutil
+pathlib
 
-# Développement
+# ── Développement ─────────────────────────────────────
 pytest
 black
 flake8
-
-
