@@ -4,16 +4,22 @@ Supporte les repos forcés ET la recherche automatique par critères
 """
 
 import os
+import sys
 import yaml
+from pathlib import Path
 from datetime import datetime, timedelta
 from github import Github, Auth, GithubException
 from dotenv import load_dotenv
+
+# Rendre le projet importable (src/ sur le path) quel que soit le CWD
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import config as cfg
 
 load_dotenv()
 
 
 class SelecteurRepo:
-    def __init__(self, chemin_config='configs/repos_github.yaml'):
+    def __init__(self, chemin_config=cfg.REPOS_CONFIG_FILE):
         """Initialise le sélecteur avec la config"""
         self.github_token = os.getenv('GITHUB_TOKEN')
         if not self.github_token:
@@ -209,7 +215,7 @@ class SelecteurRepo:
     # SAUVEGARDE
     # ────────────────────────────────────────────────────────────────
 
-    def sauvegarder_liste(self, chemin_sortie='data/raw/repos_selectionnes.yaml'):
+    def sauvegarder_liste(self, chemin_sortie=cfg.REPOS_SELECTIONNES_FILE):
         """Sauvegarde la liste dans un fichier YAML"""
         os.makedirs(os.path.dirname(chemin_sortie), exist_ok=True)
 

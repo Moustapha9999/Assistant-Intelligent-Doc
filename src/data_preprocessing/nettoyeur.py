@@ -4,8 +4,13 @@ Module de nettoyage des README
 
 import re
 import os
+import sys
 from pathlib import Path
 from tqdm import tqdm
+
+# Rendre le projet importable (src/ sur le path) quel que soit le CWD
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import config
 
 
 class NettoyeurReadme:
@@ -58,8 +63,8 @@ class NettoyeurReadme:
         
         return metadonnees + texte
     
-    def nettoyer_tous(self, dossier_entree='data/raw/readmes', 
-                      dossier_sortie='data/processed/readmes_nettoyes'):
+    def nettoyer_tous(self, dossier_entree=config.READMES_RAW_DIR,
+                      dossier_sortie=config.READMES_NETTOYES_DIR):
         """Nettoie tous les README"""
         
         os.makedirs(dossier_sortie, exist_ok=True)

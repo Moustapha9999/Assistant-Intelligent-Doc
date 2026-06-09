@@ -3,7 +3,7 @@ Module de gestion de la base vectorielle Qdrant
 """
 
 import os
-import ssl
+import sys
 import yaml
 import numpy as np
 from qdrant_client import QdrantClient
@@ -13,6 +13,10 @@ from dotenv import load_dotenv
 from tqdm import tqdm
 import uuid
 from pathlib import Path
+
+# Rendre le projet importable (src/ sur le path) quel que soit le CWD
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import config
 
 load_dotenv()
 
@@ -52,7 +56,7 @@ class GestionnaireQdrant:
         )
         print(f"  Collection '{self.collection_name}' créée (dimension: {dimension})")
 
-    def indexer_chunks(self, fichier_embeddings='data/processed/chunks/chunks_avec_embeddings.npz'):
+    def indexer_chunks(self, fichier_embeddings=config.EMBEDDINGS_FILE):
         """Indexe les chunks avec leurs embeddings dans Qdrant"""
         if not os.path.exists(fichier_embeddings):
             print(f"  Fichier introuvable: {fichier_embeddings}")
@@ -97,14 +101,13 @@ class GestionnaireQdrant:
     def tester_recherche(self, requete="How to create a REST API?", top_k=3):
         """Teste la recherche avec gestion d'erreur sur la méthode search"""
         from sentence_transformers import SentenceTransformer
-        
-        # Bypass SSL et config cache (identique au générateur)
-        ssl._create_default_https_context = ssl._create_unverified_context
-        base_dir = Path(__file__).resolve().parent.parent.parent
-        cache_folder = str(base_dir / "models_cache")
+
+        # Contournement SSL optionnel + cache unifié (identique au générateur)
+        config.configurer_ssl()
+        cache_folder = str(config.MODELS_CACHE_DIR)
 
         print(f" 🔍 Recherche: '{requete}'")
-        modele = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2', cache_folder=cache_folder)
+        modele = SentenceTransformer(config.MODELE_EMBEDDINGS, cache_folder=cache_folder)
         query_vector = modele.encode(requete).tolist()
         
         try:

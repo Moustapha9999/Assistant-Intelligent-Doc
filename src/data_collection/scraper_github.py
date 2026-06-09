@@ -4,6 +4,7 @@ Collecte : README + fichiers .md du dossier /docs + wikis
 """
 
 import os
+import sys
 import yaml
 import time
 import base64
@@ -12,11 +13,15 @@ from github import Github, Auth, GithubException
 from dotenv import load_dotenv
 from tqdm import tqdm
 
+# Rendre le projet importable (src/ sur le path) quel que soit le CWD
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import config
+
 load_dotenv()
 
 
 class ScraperGitHub:
-    def __init__(self, fichier_repos='data/raw/repos_selectionnes.yaml'):
+    def __init__(self, fichier_repos=config.REPOS_SELECTIONNES_FILE):
         """Initialise le scraper"""
         self.github_token = os.getenv('GITHUB_TOKEN')
         if not self.github_token:
@@ -177,7 +182,7 @@ chemin_fichier: {chemin_fichier}
     # PIPELINE PRINCIPAL
     # ────────────────────────────────────────────────────────────────
 
-    def scraper_tous(self, dossier_sortie='data/raw/readmes'):
+    def scraper_tous(self, dossier_sortie=config.READMES_RAW_DIR):
         """Scrape toute la documentation de tous les repos"""
         os.makedirs(dossier_sortie, exist_ok=True)
 

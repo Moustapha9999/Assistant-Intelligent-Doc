@@ -4,9 +4,14 @@ Module de découpage (chunking) des README en segments
 
 import os
 import re
+import sys
 import yaml
 from pathlib import Path
 from tqdm import tqdm
+
+# Rendre le projet importable (src/ sur le path) quel que soit le CWD
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import config
 
 
 class DecoupeurReadme:
@@ -132,22 +137,22 @@ class DecoupeurReadme:
         
         return tous_chunks
     
-    def decouper_tous(self, dossier_entree='data/processed/readmes_nettoyes',
-                     dossier_sortie='data/processed/chunks'):
+    def decouper_tous(self, dossier_entree=config.READMES_NETTOYES_DIR,
+                     dossier_sortie=config.CHUNKS_DIR):
         """Découpe tous les README en chunks"""
-        
+
         os.makedirs(dossier_sortie, exist_ok=True)
-        
+
         fichiers = list(Path(dossier_entree).glob('*.md'))
-        
+
         print(f" Découpage de {len(fichiers)} README...")
-        
+
         tous_chunks = []
-        
+
         for fichier in tqdm(fichiers, desc="Découpage"):
             chunks = self.decouper_readme(fichier)
             tous_chunks.extend(chunks)
-        
+
         # Sauvegarder tous les chunks dans un seul fichier YAML
         chemin_sortie = Path(dossier_sortie) / 'tous_chunks.yaml'
         
