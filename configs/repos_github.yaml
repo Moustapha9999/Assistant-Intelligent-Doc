@@ -1,21 +1,22 @@
 
-# Configuration des critères de sélection des repos GitHub
-
-criteres_selection:  
+criteres_selection:
   min_stars: 250
-  max_repos_par_langage: 10 
-  langages:  
+  max_repos_par_langage: 10
+  langages:
     - Python
     - JavaScript
     - Java
     - C
     - C++
-  max_age_mois: 12  
-  doit_avoir_readme: true  
-  exclure_forks: true   
-  exclure_archives: true  
+    - Go
+    - Laravel
+    - PHP
 
-# Topics préférés
+  max_age_mois: 24
+  doit_avoir_readme: true
+  exclure_forks: true
+  exclure_archives: true
+
 topics_preferes:
   - api
   - web
@@ -24,11 +25,349 @@ topics_preferes:
   - data-science
   - devtools
   - cli
+  - testing
+  - security
+  - mobile
+  - documentation
+  - learning
   - library
   - backend
   - frontend
 
-# Exclusions
+repos_forces:
+
+  # ── Python Web ──────────────────────────────────────────────────
+  - pallets/flask
+  - tiangolo/fastapi
+  - django/django
+  - tornadoweb/tornado
+  - bottlepy/bottle
+  - falconry/falcon
+  - sanic-org/sanic
+  - litestar-org/litestar
+  - aio-libs/aiohttp
+  - encode/starlette
+
+  # ── Python Data & ML ────────────────────────────────────────────
+  - numpy/numpy
+  - pandas-dev/pandas
+  - scikit-learn/scikit-learn
+  - matplotlib/matplotlib
+  - plotly/plotly.py
+  - scipy/scipy
+  - bokeh/bokeh
+  - seaborn/seaborn
+  - statsmodels/statsmodels
+  - scikit-image/scikit-image
+  - pydata/xarray
+  - streamlit/streamlit
+  - panel-dev/panel
+
+  # ── Python Deep Learning ────────────────────────────────────────
+  - pytorch/pytorch
+  - keras-team/keras
+  - huggingface/transformers
+  - huggingface/datasets
+  - openai/openai-python
+  - langchain-ai/langchain
+  - run-llama/llama_index
+  - vllm-project/vllm
+  - BerriAI/litellm
+  - ollama/ollama
+  - microsoft/semantic-kernel
+  - deepmind/alphafold
+
+  # ── Python ORM & BDD ────────────────────────────────────────────
+  - sqlalchemy/sqlalchemy
+  - tortoise/tortoise-orm
+  - redis/redis-py
+  - elastic/elasticsearch-py
+  - coleifer/peewee
+  - MongoEngine/mongoengine
+  - cassandra/cassandra-python-driver
+  - influxdata/influxdb-client-python
+  - timescale/timescaledb-python
+  - clickhouse/clickhouse-driver-python
+
+  # ── Python Outils ───────────────────────────────────────────────
+  - psf/requests
+  - encode/httpx
+  - scrapy/scrapy
+  - celery/celery
+  - python-poetry/poetry
+  - astral-sh/uv
+  - pypa/pip
+  - pyinstaller/pyinstaller
+  - pyenv/pyenv
+  - pyenv/pyenv-installer
+
+  # ── Python Tests ────────────────────────────────────────────────
+  - pytest-dev/pytest
+  - joke2k/faker
+  - locustio/locust
+
+  # ── Python Sécurité ─────────────────────────────────────────────
+  - pyca/cryptography
+  - jpadilla/pyjwt
+  - lepture/authlib
+  - pallets/itsdangerous
+  - pyca/bcrypt
+  - pyca/argon2-cffi
+  - pyca/pyopenssl
+  - pyca/pycryptodome  
+  - pyca/pycryptodomex
+  - pyca/pycryptodomex-libsodium
+  - pyca/pycryptodomex-pynacl
+
+  # ── JavaScript Frameworks ───────────────────────────────────────
+  - expressjs/express
+  - nestjs/nest
+  - fastify/fastify
+  - koajs/koa
+  - hapijs/hapi
+  - strapi/strapi
+  - adonisjs/core
+
+  # ── JavaScript Frontend ─────────────────────────────────────────
+  - facebook/react
+  - vuejs/vue
+  - vuejs/vue-router
+  - angular/angular
+  - sveltejs/svelte
+  - solidjs/solid
+  - preactjs/preact
+  - alpinejs/alpine
+
+  # ── JavaScript Build ────────────────────────────────────────────
+  - vitejs/vite
+  - webpack/webpack
+  - rollup/rollup
+  - vercel/next.js
+  - nuxt/nuxt
+  - remix-run/remix
+  - withastro/astro
+
+  # ── JavaScript Utilitaires ──────────────────────────────────────
+  - axios/axios
+  - lodash/lodash
+  - moment/moment
+  - date-fns/date-fns
+  - colinhacks/zod
+
+  # ── JavaScript Tests ────────────────────────────────────────────
+  - jestjs/jest
+  - vitest-dev/vitest
+  - mochajs/mocha
+  - cypress-io/cypress
+  - microsoft/playwright
+  - puppeteer/puppeteer
+
+  # ── JavaScript BDD ──────────────────────────────────────────────
+  - prisma/prisma
+  - sequelize/sequelize
+  - typeorm/typeorm
+  - knexjs/knex
+  - Automattic/mongoose
+  - luin/ioredis
+
+  # ── TypeScript ──────────────────────────────────────────────────
+  - microsoft/TypeScript
+  - trpc/trpc
+  - graphql/graphql-js
+  - apollographql/apollo-server
+
+  # ── Java Frameworks ─────────────────────────────────────────────
+  - spring-projects/spring-boot
+  - spring-projects/spring-framework
+  - spring-projects/spring-security
+  - micronaut-projects/micronaut-core
+  - quarkusio/quarkus
+
+  # ── Java Outils ─────────────────────────────────────────────────
+  - google/guava
+  - FasterXML/jackson-databind
+  - google/gson
+  - square/retrofit
+  - square/okhttp
+  - ReactiveX/RxJava
+
+  # ── Java Tests ──────────────────────────────────────────────────
+  - junit-team/junit5
+  - mockito/mockito
+  - assertj/assertj-core
+  - testcontainers/testcontainers-java
+  - testcontainers/testcontainers-java-junit-jupiter
+  - testcontainers/testcontainers-java-testng
+  - testcontainers/testcontainers-java-junit4
+  - testcontainers/testcontainers-java-junit5
+
+  # ── C Systèmes ──────────────────────────────────────────────────
+  - curl/curl
+  - redis/redis
+  - libuv/libuv
+  - facebook/zstd
+  - openssl/openssl
+  - git/git
+
+  # ── C++ Bibliothèques ───────────────────────────────────────────
+  - catchorg/Catch2
+  - google/googletest
+  - nlohmann/json
+  - fmtlib/fmt
+  - gabime/spdlog
+  - grpc/grpc
+  - protocolbuffers/protobuf
+
+  # ── Go ──────────────────────────────────────────────────────────
+  - gin-gonic/gin
+  - labstack/echo
+  - gofiber/fiber
+  - gorilla/mux
+  - urfave/cli
+  - spf13/cobra
+  - gorm/gorm
+  - go-redis/redis
+  - stretchr/testify
+  - uber-go/zap
+
+  # ── Rust ────────────────────────────────────────────────────────
+  - actix/actix-web
+  - tokio-rs/axum
+  - SergioBenitez/Rocket
+  - tokio-rs/tokio
+  - serde-rs/serde
+  - clap-rs/clap
+  - BurntSushi/ripgrep
+
+  # ── PHP ─────────────────────────────────────────────────────────
+  - laravel/laravel
+  - laravel/framework
+  - symfony/symfony
+  - slimphp/Slim
+  - guzzlehttp/guzzle
+
+  # ── Ruby ────────────────────────────────────────────────────────
+  - rails/rails
+  - sinatra/sinatra
+  - rspec/rspec-core
+  - faker-ruby/faker
+
+  # ── DevOps ──────────────────────────────────────────────────────
+  - docker/compose
+  - helm/helm
+  - hashicorp/terraform
+  - ansible/ansible
+  - grafana/grafana
+  - prometheus/prometheus
+
+  # ── Outils Dev ──────────────────────────────────────────────────
+  - vscode/vscode
+  - jetbrains/intellij-community
+  - microsoft/vscode-python
+  - microsoft/vscode-go
+  - microsoft/vscode-javascript
+  - microsoft/vscode-typescript
+  - microsoft/vscode-java
+  - microsoft/vscode-cpp
+  - microsoft/vscode-rust
+  - microsoft/vscode-php
+  - microsoft/vscode-docker
+  - microsoft/vscode-remote-release
+  - microsoft/vscode-cpptools
+  - github/gh-cli
+  - prettier/prettier
+  - eslint/eslint
+  - pre-commit/pre-commit
+  - typicode/husky
+  - docker/cli
+  - kubernetes/kubernetes
+  - hashicorp/consul
+  - hashicorp/vault
+  - hashicorp/packer
+
+
+  # ── Sécurité ────────────────────────────────────────────────────
+  - OWASP/CheatSheetSeries
+  - OWASP/owasp-sample-apps
+  - OWASP/owasp-vulnerable-web-applications-directory
+  - OWASP/owasp-mstg
+  - supabase/supabase
+  - auth0/auth0-python
+  - auth0/auth0-node
+  - auth0/auth0-java
+  - auth0/auth0-ruby
+  - auth0/auth0-php
+  - auth0/auth0-go
+  - auth0/auth0-dotnet
+  - auth0/auth0-ios
+  - auth0/auth0-android
+  - okta/okta-sdk-python
+  - okta/okta-sdk-nodejs
+  - okta/okta-sdk-java
+  - okta/okta-sdk-ruby
+  - keycloak/keycloak
+  - ory/hydra
+  - ory/kratos
+
+  # ── IA & LLM ────────────────────────────────────────────────────
+  - openai/openai-python
+  - huggingface/transformers
+  - huggingface/datasets
+  - run-llama/llama_index
+  - google/deepmind-research
+  - deepmind/alphafold
+  - google/medperf
+  - anthropics/anthropic-sdk-python
+  - langchain-ai/langchain
+  - BerriAI/litellm
+  - ollama/ollama
+  - vllm-project/vllm
+  - microsoft/semantic-kernel
+
+  # ── API & GraphQL ───────────────────────────────────────────────
+  - graphql/graphql-spec
+  - apollographql/apollo-client
+  - swagger-api/swagger-ui
+  - OAI/OpenAPI-Specification
+  - encode/starlette
+  - trpc/trpc
+  - graphql/graphql-js
+  - apollographql/apollo-server
+  - postmanlabs/postman-app-support
+  - kong/kong
+  - hasura/graphql-engine
+  - grpc/grpc
+  - protocolbuffers/protobuf
+
+  # ── Mobile ──────────────────────────────────────────────────────
+  - facebook/react-native
+  - flutter/flutter
+  - expo/expo
+  - ionic-team/ionic-framework
+
+  # ── Documentation & Apprentissage ───────────────────────────────
+  - kamranahmedse/developer-roadmap
+  - donnemartin/system-design-primer
+  - jlevy/the-art-of-command-line
+  - ryanmcdermott/clean-code-javascript
+  - goldbergyoni/nodebestpractices
+  - getify/You-Dont-Know-JS
+  - practical-tutorials/project-based-learning
+  - freeCodeCamp/freeCodeCamp
+
+
 repos_exclus:
-  - awesome-lists
-  - documentation-only
+  - bitcoin/bitcoin
+  - torvalds/linux
+  - obsproject/obs-studio
+  - FFmpeg/FFmpeg
+  - Genymobile/scrcpy
+  - ventoy/Ventoy
+  - NationalSecurityAgency/ghidra
+  - yt-dlp/yt-dlp
+  - ytdl-org/youtube-dl
+  - AUTOMATIC1111/stable-diffusion-webui
+  - ocornut/imgui
+  - godotengine/godot
+  - microsoft/terminal
+  - electron/electron
