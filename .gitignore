@@ -32,6 +32,7 @@ models_cache/
 .ipynb_checkpoints
 
 # Environment variables
+.env
 .env.example
 .env.local
 

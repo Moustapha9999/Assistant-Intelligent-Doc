@@ -1,0 +1,54 @@
+# ══════════════════════════════════════════════════════
+# .dockerignore — Fichiers exclus de l'image Docker
+# ══════════════════════════════════════════════════════
+
+# Environnement virtuel Python
+.venv/
+venv/
+env/
+
+# Cache Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Variables d'environnement (sécurité)
+.env
+
+# Données volumineuses
+data/raw/
+data/processed/chunks/chunks_avec_embeddings.npz
+qdrant_storage/
+cache_huggingface/
+models_cache/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Logs
+logs/
+*.log
+
+# Résultats temporaires
+resultats/metrics/
+resultats/rapports/
+
+# Docker
+docker/
+Dockerfile
+.dockerignore
+
+# Documentation
+docs/
+notebooks/
+
+# OS
+.DS_Store
+Thumbs.db

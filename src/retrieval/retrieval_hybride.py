@@ -44,8 +44,8 @@ class RetrievalHybride:
         # Chemins
         self.base_dir          = Path(__file__).resolve().parent.parent
         self.cache_folder      = str(self.base_dir / "models_cache")
-        self.chunks_file       = str(
-            self.base_dir / "data" / "processed" / "chunks" / "tous_chunks.yaml"
+        self.chunks_file = str(
+        self.base_dir.parent / "data" / "processed" / "chunks" / "tous_chunks.yaml"
         )
 
         # ── SSL fix (développement local) ───────────────────────────
@@ -332,7 +332,7 @@ class RetrievalHybride:
             print(f"       Extrait : {doc.get('texte', '')[:200]}...")
         print(f"  {'─' * 60}\n")
 
-s
+
 # ────────────────────────────────────────────────────────────────────
 # TEST RAPIDE
 # ────────────────────────────────────────────────────────────────────

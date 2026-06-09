@@ -32,7 +32,7 @@ class GenerateurEmbeddings:
         # Charger le modèle
         try:
             self.modele = SentenceTransformer(nom_modele)
-            self.dimension = self.modele.get_sentence_embedding_dimension()
+            self.dimension = self.modele.get_embedding_dimension()
             print(f" Modèle chargé (dimension: {self.dimension})")
         except Exception as e:
             print(f" Erreur lors du chargement du modèle: {e}")
