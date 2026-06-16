@@ -1,10 +1,10 @@
 """
-Module de collecte de documentation GitHub
-Collecte : README + fichiers .md du dossier /docs + wikis
+Scraper GitHub enrichi
+Collecte : README + docs + code source (.py, .js, .ts, .java, .go, .rs, .cpp, .sql, .ipynb)
+ISI KOMUNIK · Master IAGE
 """
 
 import os
-import sys
 import yaml
 import time
 import base64
@@ -13,227 +13,261 @@ from github import Github, Auth, GithubException
 from dotenv import load_dotenv
 from tqdm import tqdm
 
-# Rendre le projet importable (src/ sur le path) quel que soit le CWD
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import config
-
 load_dotenv()
+
+# ── Extensions à collecter ───────────────────────────────────────
+EXTENSIONS_CODE = {
+    '.py', '.js', '.ts', '.java', '.go', '.rs',
+    '.cpp', '.c', '.h', '.sql', '.ipynb',
+}
+EXTENSIONS_DOC = {
+    '.md', '.rst', '.txt',
+}
+EXTENSIONS_CONFIG = {
+    '.yaml', '.yml', '.json', '.toml',
+}
+TOUTES_EXTENSIONS = EXTENSIONS_CODE | EXTENSIONS_DOC | EXTENSIONS_CONFIG
+
+# ── Dossiers à ignorer ───────────────────────────────────────────
+DOSSIERS_EXCLUS = {
+    'node_modules', 'dist', 'build', 'target', '.git',
+    '__pycache__', '.venv', 'venv', 'env', '.env',
+    'vendor', 'bower_components', 'coverage', '.nyc_output',
+    'eggs', '.eggs', 'htmlcov', '.tox', '.pytest_cache',
+}
+
+# ── Limites ───────────────────────────────────────────────────────
+MAX_FICHIERS_PAR_REPO  = 50   # max fichiers code par repo
+MAX_TAILLE_FICHIER     = 100_000  # 100 KB max par fichier
+MAX_PROFONDEUR         = 4    # profondeur max de récursion
 
 
 class ScraperGitHub:
-    def __init__(self, fichier_repos=config.REPOS_SELECTIONNES_FILE):
-        """Initialise le scraper"""
-        self.github_token = os.getenv('GITHUB_TOKEN')
-        if not self.github_token:
-            raise ValueError("GITHUB_TOKEN non trouvé dans .env")
 
-        auth = Auth.Token(self.github_token)
-        self.github = Github(auth=auth)
+    def __init__(self, fichier_repos='data/raw/repos_selectionnes.yaml'):
+        token = os.getenv('GITHUB_TOKEN')
+        if not token:
+            raise ValueError("GITHUB_TOKEN manquant dans .env")
+
+        self.github = Github(auth=Auth.Token(token))
 
         if not os.path.exists(fichier_repos):
-            raise FileNotFoundError(f"Fichier introuvable : {fichier_repos}")
+            raise FileNotFoundError(f"Introuvable : {fichier_repos}")
 
         with open(fichier_repos, 'r', encoding='utf-8') as f:
             self.repos = yaml.safe_load(f) or []
 
         print(f"✅ {len(self.repos)} repos à scraper")
 
-    # ────────────────────────────────────────────────────────────────
-    # COLLECTE README
-    # ────────────────────────────────────────────────────────────────
+    # ────────────────────────────────────────────────────────────
+    # UTILITAIRES
+    # ────────────────────────────────────────────────────────────
 
-    def _recuperer_readme(self, repo_gh):
-        """Récupère le README principal"""
+    def _dossier_exclu(self, chemin: str) -> bool:
+        parts = Path(chemin).parts
+        return any(p in DOSSIERS_EXCLUS for p in parts)
+
+    def _extension_valide(self, nom: str) -> bool:
+        return Path(nom).suffix.lower() in TOUTES_EXTENSIONS
+
+    def _decoder_contenu(self, fichier_gh) -> str:
+        try:
+            if fichier_gh.size > MAX_TAILLE_FICHIER:
+                return None
+            raw = base64.b64decode(fichier_gh.content)
+            try:
+                return raw.decode('utf-8')
+            except UnicodeDecodeError:
+                return raw.decode('latin-1', errors='replace')
+        except Exception:
+            return None
+
+    def _entete(self, infos_repo: dict, chemin: str, type_doc: str) -> str:
+        return (
+            f"---\n"
+            f"nom_complet: {infos_repo['nom_complet']}\n"
+            f"langage: {infos_repo.get('langage', 'Unknown')}\n"
+            f"etoiles: {infos_repo.get('etoiles', 0)}\n"
+            f"url: {infos_repo.get('url', '')}\n"
+            f"type_doc: {type_doc}\n"
+            f"chemin_fichier: {chemin}\n"
+            f"---\n\n"
+        )
+
+    # ────────────────────────────────────────────────────────────
+    # COLLECTE README
+    # ────────────────────────────────────────────────────────────
+
+    def _collecter_readme(self, repo_gh) -> str:
         try:
             readme = repo_gh.get_readme()
-            return readme.decoded_content.decode('utf-8', errors='replace')
+            return base64.b64decode(readme.content).decode('utf-8', errors='replace')
         except Exception:
             return None
 
-    # ────────────────────────────────────────────────────────────────
-    # COLLECTE FICHIERS .MD (docs/, wiki/, etc.)
-    # ────────────────────────────────────────────────────────────────
+    # ────────────────────────────────────────────────────────────
+    # COLLECTE FICHIERS CODE (récursif)
+    # ────────────────────────────────────────────────────────────
 
-    def _lister_fichiers_md(self, repo_gh, dossiers=None, profondeur_max=3):
-        """
-        Liste tous les fichiers .md dans les dossiers spécifiés.
-        Par défaut : racine + docs/ + documentation/ + wiki/ + guide/ + tutorial/
-        """
-        if dossiers is None:
-            dossiers = ['', 'docs', 'documentation', 'doc', 'wiki',
-                        'guide', 'guides', 'tutorial', 'tutorials',
-                        'examples', 'example', 'getting-started',
-                        'reference', 'api', 'src/docs']
+    def _lister_fichiers(self, repo_gh, chemin='', profondeur=0) -> list:
+        """Liste récursivement les fichiers pertinents"""
+        if profondeur > MAX_PROFONDEUR:
+            return []
 
-        fichiers_trouves = []
-
-        for dossier in dossiers:
-            try:
-                contenu = repo_gh.get_contents(dossier)
-                if not isinstance(contenu, list):
-                    contenu = [contenu]
-
-                for item in contenu:
-                    if item.type == 'file' and item.name.lower().endswith('.md'):
-                        fichiers_trouves.append(item)
-                    elif item.type == 'dir' and profondeur_max > 1:
-                        # Récursion limitée
-                        try:
-                            sous_contenu = repo_gh.get_contents(item.path)
-                            if not isinstance(sous_contenu, list):
-                                sous_contenu = [sous_contenu]
-                            for sous_item in sous_contenu:
-                                if sous_item.type == 'file' and sous_item.name.lower().endswith('.md'):
-                                    fichiers_trouves.append(sous_item)
-                        except Exception:
-                            pass
-
-            except GithubException:
-                pass
-            except Exception:
-                pass
-
-        return fichiers_trouves
-
-    def _recuperer_contenu_fichier(self, fichier_gh):
-        """Récupère le contenu d'un fichier GitHub"""
+        fichiers = []
         try:
-            if fichier_gh.encoding == 'base64':
-                return base64.b64decode(fichier_gh.content).decode('utf-8', errors='replace')
-            return fichier_gh.decoded_content.decode('utf-8', errors='replace')
+            items = repo_gh.get_contents(chemin)
+            if not isinstance(items, list):
+                items = [items]
+
+            for item in items:
+                if self._dossier_exclu(item.path):
+                    continue
+
+                if item.type == 'file':
+                    if self._extension_valide(item.name):
+                        fichiers.append(item)
+
+                elif item.type == 'dir':
+                    sous = self._lister_fichiers(repo_gh, item.path, profondeur + 1)
+                    fichiers.extend(sous)
+
+                # Limiter pour éviter les timeouts
+                if len(fichiers) >= MAX_FICHIERS_PAR_REPO * 2:
+                    break
+
+        except GithubException:
+            pass
         except Exception:
-            return None
+            pass
 
-    # ────────────────────────────────────────────────────────────────
-    # FORMATAGE AVEC MÉTADONNÉES
-    # ────────────────────────────────────────────────────────────────
+        return fichiers
 
-    def _formater_contenu(self, infos_repo, contenu, type_doc='readme', chemin_fichier=''):
-        """Ajoute les métadonnées au contenu"""
-        entete = f"""---
-nom_complet: {infos_repo['nom_complet']}
-langage: {infos_repo.get('langage', 'Unknown')}
-etoiles: {infos_repo.get('etoiles', 0)}
-url: {infos_repo.get('url', '')}
-type_doc: {type_doc}
-chemin_fichier: {chemin_fichier}
----
+    # ────────────────────────────────────────────────────────────
+    # SCRAPING D'UN REPO
+    # ────────────────────────────────────────────────────────────
 
-"""
-        return entete + contenu
-
-    # ────────────────────────────────────────────────────────────────
-    # SCRAPING COMPLET D'UN REPO
-    # ────────────────────────────────────────────────────────────────
-
-    def scraper_repo(self, infos_repo, dossier_sortie):
-        """Scrape toute la documentation d'un repo"""
+    def scraper_repo(self, infos_repo: dict, dossier_sortie: str) -> dict:
+        """Scrape README + code source d'un repo"""
         nom_complet  = infos_repo['nom_complet']
         nom_securise = nom_complet.replace('/', '_')
-        docs_collectes = []
+        stats = {'readme': 0, 'code': 0, 'doc': 0, 'erreurs': 0}
 
         try:
             repo_gh = self.github.get_repo(nom_complet)
 
-            # 1. README principal
-            contenu_readme = self._recuperer_readme(repo_gh)
-            if contenu_readme:
-                chemin = Path(dossier_sortie) / f"{nom_securise}_README.md"
-                with open(chemin, 'w', encoding='utf-8') as f:
-                    f.write(self._formater_contenu(
-                        infos_repo, contenu_readme, 'readme', 'README.md'
-                    ))
-                docs_collectes.append('README')
+            # 1. README
+            readme = self._collecter_readme(repo_gh)
+            if readme:
+                chemin_out = Path(dossier_sortie) / f"{nom_securise}_README.md"
+                with open(chemin_out, 'w', encoding='utf-8') as f:
+                    f.write(self._entete(infos_repo, 'README.md', 'readme'))
+                    f.write(readme)
+                stats['readme'] += 1
 
-            # 2. Fichiers .md dans /docs et autres dossiers
-            fichiers_md = self._lister_fichiers_md(repo_gh)
+            # 2. Fichiers code & docs
+            fichiers = self._lister_fichiers(repo_gh)
 
-            for fichier in fichiers_md[:30]:  # max 30 fichiers par repo
-                # Éviter de re-scraper le README
-                if fichier.name.upper() in ['README.MD', 'README.MD']:
+            # Trier par priorité : code d'abord, puis doc
+            def priorite(f):
+                ext = Path(f.name).suffix.lower()
+                if ext in EXTENSIONS_CODE: return 0
+                if ext in EXTENSIONS_DOC:  return 1
+                return 2
+
+            fichiers.sort(key=priorite)
+            fichiers = fichiers[:MAX_FICHIERS_PAR_REPO]
+
+            for fichier in fichiers:
+                # Skip README (déjà collecté)
+                if fichier.name.upper().startswith('README'):
                     continue
 
-                contenu = self._recuperer_contenu_fichier(fichier)
-                if not contenu or len(contenu.strip()) < 100:
+                contenu = self._decoder_contenu(fichier)
+                if not contenu or len(contenu.strip()) < 50:
                     continue
+
+                ext      = Path(fichier.name).suffix.lower()
+                type_doc = 'code' if ext in EXTENSIONS_CODE else 'documentation'
 
                 # Nom de fichier sécurisé
-                chemin_relatif = fichier.path.replace('/', '_').replace(' ', '-')
-                nom_fichier    = f"{nom_securise}_{chemin_relatif}"
-                chemin_sortie_fichier = Path(dossier_sortie) / nom_fichier
+                chemin_rel  = fichier.path.replace('/', '_').replace(' ', '-')
+                nom_fichier = f"{nom_securise}_{chemin_rel}"
+                chemin_out  = Path(dossier_sortie) / nom_fichier
 
-                with open(chemin_sortie_fichier, 'w', encoding='utf-8') as f:
-                    f.write(self._formater_contenu(
-                        infos_repo, contenu, 'documentation', fichier.path
-                    ))
-                docs_collectes.append(fichier.path)
-                time.sleep(0.1)  # Rate limiting
+                with open(chemin_out, 'w', encoding='utf-8') as f:
+                    f.write(self._entete(infos_repo, fichier.path, type_doc))
+                    f.write(contenu)
 
-            return docs_collectes
+                if ext in EXTENSIONS_CODE:
+                    stats['code'] += 1
+                else:
+                    stats['doc'] += 1
+
+                time.sleep(0.05)  # Rate limiting léger
 
         except GithubException as e:
-            print(f"   ❌ GitHub error {nom_complet}: {e.status}")
-            return []
+            print(f"   ❌ {nom_complet}: {e.status}")
+            stats['erreurs'] += 1
         except Exception as e:
-            print(f"   ❌ Erreur {nom_complet}: {e}")
-            return []
+            print(f"   ❌ {nom_complet}: {e}")
+            stats['erreurs'] += 1
 
-    # ────────────────────────────────────────────────────────────────
+        return stats
+
+    # ────────────────────────────────────────────────────────────
     # PIPELINE PRINCIPAL
-    # ────────────────────────────────────────────────────────────────
+    # ────────────────────────────────────────────────────────────
 
-    def scraper_tous(self, dossier_sortie=config.READMES_RAW_DIR):
-        """Scrape toute la documentation de tous les repos"""
+    def scraper_tous(self, dossier_sortie='data/raw/readmes'):
         os.makedirs(dossier_sortie, exist_ok=True)
 
         print("=" * 60)
-        print("📥 SCRAPING DE LA DOCUMENTATION")
+        print("📥 SCRAPING — README + CODE SOURCE")
         print("=" * 60)
 
-        stats = {
-            'total'          : len(self.repos),
-            'succes'         : 0,
-            'echecs'         : 0,
-            'docs_collectes' : 0,
+        total_stats = {
+            'repos_ok': 0, 'repos_ko': 0,
+            'readme': 0, 'code': 0, 'doc': 0,
         }
 
-        for infos_repo in tqdm(self.repos, desc="📥 Scraping"):
-            if 'nom_complet' not in infos_repo:
+        for infos in tqdm(self.repos, desc="📥 Scraping"):
+            if 'nom_complet' not in infos:
                 continue
 
-            nom = infos_repo['nom_complet']
-            docs = self.scraper_repo(infos_repo, dossier_sortie)
+            stats = self.scraper_repo(infos, dossier_sortie)
 
-            if docs:
-                stats['succes']         += 1
-                stats['docs_collectes'] += len(docs)
+            if stats['erreurs'] == 0:
+                total_stats['repos_ok'] += 1
             else:
-                stats['echecs'] += 1
+                total_stats['repos_ko'] += 1
 
-            time.sleep(0.3)  # Rate limiting global
+            total_stats['readme'] += stats['readme']
+            total_stats['code']   += stats['code']
+            total_stats['doc']    += stats['doc']
 
-        # Récapitulatif
+            time.sleep(0.3)
+
+        total_docs = total_stats['readme'] + total_stats['code'] + total_stats['doc']
+
         print(f"\n{'=' * 60}")
         print(f"✅ Scraping terminé !")
-        print(f"   Repos avec succès : {stats['succes']}/{stats['total']}")
-        print(f"   Repos en échec    : {stats['echecs']}")
-        print(f"   Documents totaux  : {stats['docs_collectes']}")
-        print(f"   Dossier de sortie : {dossier_sortie}/")
+        print(f"   Repos OK    : {total_stats['repos_ok']}/{len(self.repos)}")
+        print(f"   Repos KO    : {total_stats['repos_ko']}")
+        print(f"   README      : {total_stats['readme']}")
+        print(f"   Code source : {total_stats['code']}")
+        print(f"   Docs        : {total_stats['doc']}")
+        print(f"   TOTAL docs  : {total_docs}")
+        print(f"   Dossier     : {dossier_sortie}/")
         print(f"{'=' * 60}")
 
-        self._sauvegarder_recap(dossier_sortie, stats)
-        return stats
+        # Récapitulatif
+        recap = {**total_stats, 'total_docs': total_docs,
+                 'date': time.strftime('%Y-%m-%d %H:%M:%S')}
+        with open(Path(dossier_sortie) / '_recap_scraping.yaml', 'w') as f:
+            yaml.dump(recap, f)
 
-    def _sauvegarder_recap(self, dossier_sortie, stats):
-        """Sauvegarde le récapitulatif du scraping"""
-        recap = {
-            **stats,
-            'date_scraping': time.strftime('%Y-%m-%d %H:%M:%S'),
-        }
-        chemin = Path(dossier_sortie) / '_recap_scraping.yaml'
-        with open(chemin, 'w', encoding='utf-8') as f:
-            yaml.dump(recap, f, allow_unicode=True)
-        print(f"💾 Récapitulatif : {chemin}")
+        return total_stats
 
 
 if __name__ == "__main__":

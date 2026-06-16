@@ -41,6 +41,7 @@ pyyaml
 tqdm
 python-dateutil
 pathlib
+pdfplumber
 
 # ── Développement ─────────────────────────────────────
 pytest

@@ -45,7 +45,7 @@ class RetrievalHybride:
         self.base_dir          = Path(__file__).resolve().parent.parent
         self.cache_folder      = str(self.base_dir / "models_cache")
         self.chunks_file = str(
-        self.base_dir.parent / "data" / "processed" / "chunks" / "tous_chunks.yaml"
+        self.base_dir.parent / "data" / "processed" / "chunks" / "tous_chunks.json"
         )
 
         # ── SSL fix (développement local) ───────────────────────────
@@ -91,8 +91,9 @@ class RetrievalHybride:
             print(f"   ⚠️  Fichier chunks introuvable : {self.chunks_file}")
             return [], None
 
+        import json
         with open(self.chunks_file, "r", encoding="utf-8") as f:
-            chunks = yaml.safe_load(f)
+            chunks = json.load(f)
 
         # Tokenisation simple : minuscules + split
         corpus_tokenise = [

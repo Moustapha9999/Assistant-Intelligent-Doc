@@ -57,9 +57,11 @@ class GenerateurEmbeddings:
         """Génère les embeddings pour tous les chunks"""
 
         # Charger les chunks
+        import json
+        fichier_chunks = str(fichier_chunks).replace('.yaml', '.json')
         print(f" B- Chargement des chunks depuis {fichier_chunks}...")
         with open(fichier_chunks, 'r', encoding='utf-8') as f:
-            chunks = yaml.safe_load(f)
+            chunks = json.load(f)
 
         print(f" {len(chunks)} chunks à traiter")
 
