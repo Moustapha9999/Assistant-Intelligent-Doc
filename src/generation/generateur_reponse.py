@@ -26,11 +26,35 @@ Tu adaptes TOTALEMENT ta réponse à la NATURE de la demande :
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🔧 SI LA DEMANDE EST TECHNIQUE (code, programmation, debug, architecture...)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- Fournis du code complet, fonctionnel et commenté
-- Structure avec des sections claires (## Concepts, ### Implémentation, etc.)
-- Cite les documents GitHub pertinents
-- Ajoute des ressources web si utiles
-- Explique le pourquoi, pas seulement le comment
+Sois EXHAUSTIF et PÉDAGOGIQUE, comme un excellent cours. Structure ta réponse :
+
+## Titre clair du sujet
+
+Introduction expliquant le concept en 2-3 phrases.
+
+### Concepts clés
+Explique les notions fondamentales en détail.
+
+### Implémentation pas à pas
+Fournis du code COMPLET, fonctionnel et abondamment commenté. Plusieurs
+exemples si pertinent (cas simple puis cas avancé).
+
+```python
+# Code détaillé avec commentaires expliquant chaque partie
+```
+
+### Bonnes pratiques
+Liste les patterns recommandés, pièges à éviter, conseils de pro.
+
+### Alternatives & comparaisons
+Mentionne d'autres approches, librairies ou outils, avec leurs avantages.
+
+EXIGENCES :
+- Réponses LONGUES et RICHES (vise 600-1200 mots minimum)
+- TOUJOURS plusieurs blocs de code concrets
+- Explique le POURQUOI derrière chaque choix technique
+- Termine OBLIGATOIREMENT par une liste de ressources d'apprentissage
+  (documentation officielle, tutoriels, vidéos) — utilise les liens fournis
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💬 SI LA DEMANDE EST CONVERSATIONNELLE (discussion, débat, opinion, conseil,
@@ -74,17 +98,22 @@ PROMPT_UTILISATEUR_TECHNIQUE = """Contexte — Documents GitHub pertinents du co
 
 ---
 
-Ressources web disponibles :
+Ressources web disponibles (tutoriels, documentation, YouTube) :
 {ressources_web}
 
 ---
 
 Question : {question}
 
-Consignes :
-- Utilise les documents ET tes connaissances générales
-- Fournis du code complet et fonctionnel si pertinent
-- Inclus les liens des ressources web si utiles
+Consignes IMPÉRATIVES :
+- Réponse LONGUE, RICHE et PÉDAGOGIQUE (600-1200 mots minimum)
+- Plusieurs blocs de code COMPLETS et commentés
+- Structure avec sections (## et ###)
+- Explique le POURQUOI de chaque choix
+- Mentionne bonnes pratiques et alternatives
+- TERMINE OBLIGATOIREMENT par une section "### 📚 Ressources pour aller plus loin"
+  reprenant les liens web fournis ci-dessus sous forme de liens markdown cliquables
+  (documentation officielle, tutoriels écrits, et vidéos YouTube)
 - Réponds en français, termes techniques en anglais
 """
 
@@ -242,6 +271,36 @@ class WebSearcher:
 
         return resultats
 
+    def rechercher_ressources_apprentissage(self, question: str) -> List[Dict]:
+        """Recherche ciblée : tutoriels, YouTube, documentation officielle"""
+        ressources = []
+
+        # 1. Documentation / tutoriels écrits
+        ressources.extend(self.rechercher_html(f"{question} tutoriel", 3))
+        ressources.extend(self.rechercher_html(f"{question} documentation officielle", 2))
+
+        # 2. Liens YouTube (recherche directe)
+        try:
+            mots = "+".join(question.split()[:6])
+            yt_url = f"https://www.youtube.com/results?search_query={mots}+tutoriel+français"
+            ressources.append({
+                "titre" : f"🎥 Vidéos YouTube : {question[:50]}",
+                "url"   : yt_url,
+                "extrait": "Tutoriels vidéo sur le sujet",
+                "source": "YouTube",
+            })
+            yt_url_en = f"https://www.youtube.com/results?search_query={mots}+tutorial"
+            ressources.append({
+                "titre" : f"🎥 YouTube (EN) : {question[:50]}",
+                "url"   : yt_url_en,
+                "extrait": "Video tutorials",
+                "source": "YouTube",
+            })
+        except Exception:
+            pass
+
+        return ressources
+
     def rechercher_multi(self, question: str) -> List[Dict]:
         tous = []
         tous.extend(self.rechercher(question))
@@ -250,11 +309,10 @@ class WebSearcher:
         tous.extend(self.rechercher(f"{question} wikipedia", 2))
 
         # Résultats organiques réels (HTML)
-        tous.extend(self.rechercher_html(question, 5))
+        tous.extend(self.rechercher_html(question, 4))
 
-        mots_cles = question.split()[:5]
-        query_doc = " ".join(mots_cles) + " documentation officielle"
-        tous.extend(self.rechercher_html(query_doc, 3))
+        # Ressources d'apprentissage (tutos + YouTube)
+        tous.extend(self.rechercher_ressources_apprentissage(question))
 
         vus = set()
         uniques = []
@@ -263,7 +321,7 @@ class WebSearcher:
             if url and url not in vus and "duckduckgo.com" not in url:
                 vus.add(url)
                 uniques.append(r)
-        return uniques[:8]
+        return uniques[:10]
 
     def formater(self, resultats: List[Dict]) -> str:
         if not resultats:

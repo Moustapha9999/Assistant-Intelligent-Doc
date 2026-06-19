@@ -234,6 +234,55 @@ label { color: #8B949E !important; font-size: 11px !important; }
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: #0D1117; }
 ::-webkit-scrollbar-thumb { background: #30363D; border-radius: 2px; }
+
+/* ── st.chat_message styling ── */
+[data-testid="stChatMessage"] {
+    background: transparent !important;
+    padding: 6px 0 !important;
+    max-width: 820px; margin: 0 auto;
+}
+[data-testid="stChatMessageContent"] {
+    background: #161B22 !important;
+    border: 1px solid #21262D !important;
+    border-radius: 12px !important;
+    padding: 14px 18px !important;
+    font-size: 14px !important;
+    color: #C9D1D9 !important;
+    line-height: 1.8 !important;
+}
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageContent"] {
+    background: #1C2128 !important;
+    border-color: #30363D !important;
+    color: #E6EDF3 !important;
+}
+[data-testid="stChatMessageContent"] pre {
+    background: #0D1117 !important;
+    border: 1px solid #30363D !important;
+    border-radius: 8px !important;
+    padding: 14px !important;
+    overflow-x: auto !important;
+    font-size: 12px !important;
+}
+[data-testid="stChatMessageContent"] code {
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 12px !important;
+    background: #0D1117 !important;
+    border: 1px solid #30363D !important;
+    border-radius: 3px !important;
+    padding: 1px 5px !important;
+    color: #79B8FF !important;
+}
+[data-testid="stChatMessageContent"] pre code {
+    background: none !important;
+    border: none !important;
+    padding: 0 !important;
+    color: #E6EDF3 !important;
+}
+[data-testid="stChatMessageContent"] a { color: #58A6FF !important; }
+[data-testid="stChatMessageContent"] strong { color: #E6EDF3 !important; }
+[data-testid="stChatMessageContent"] h1,
+[data-testid="stChatMessageContent"] h2 { color: #E6EDF3 !important; font-size: 16px !important; margin: 14px 0 6px !important; }
+[data-testid="stChatMessageContent"] h3 { color: #C9D1D9 !important; font-size: 14px !important; }
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -423,66 +472,53 @@ with col:
     for msg in st.session_state.messages:
         if msg["role"] == "user":
             fichiers_msg = msg.get("fichiers", [])
-            badges = "".join([
-                f'<span class="file-badge"><span class="fi">{icone_fichier(f["nom"])}</span>{f["nom"]}</span>'
-                for f in fichiers_msg
-            ])
-            st.markdown(f"""
-            <div class="bubble user">
-                <div class="av usr">M</div>
-                <div class="bc">
-                    {'<div style="margin-bottom:6px;">' + badges + '</div>' if badges else ''}
-                    <div class="user-txt">{msg["content"]}</div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            with st.chat_message("user", avatar="👤"):
+                # Afficher badges fichiers si présents
+                if fichiers_msg:
+                    badges_txt = "  ".join([
+                        f"`{icone_fichier(f['nom'])} {f['nom']}`"
+                        for f in fichiers_msg
+                    ])
+                    st.markdown(badges_txt)
+                st.markdown(msg["content"])
         else:
             docs    = msg.get("docs", [])
             tokens  = msg.get("tokens", 0)
             latence = msg.get("latence", 0)
 
-            st.markdown("""
-            <div class="bubble">
-                <div class="av bot">⬡</div>
-                <div class="bc">
-                    <div class="bot-txt">
-            """, unsafe_allow_html=True)
+            with st.chat_message("assistant", avatar="🤖"):
+                st.markdown(msg["content"])
 
-            st.markdown(msg["content"])
+                # Métriques
+                st.markdown(
+                    f'<div class="msg-meta">'
+                    f'<span>⏱ {latence:.1f}s</span>'
+                    f'<span>📄 {len(docs)} sources</span>'
+                    f'<span>🔢 {tokens} tokens</span>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
 
-            st.markdown(f"""
-                    </div>
-                    <div class="msg-meta">
-                        <span>⏱ {latence:.1f}s</span>
-                        <span>📄 {len(docs)} sources</span>
-                        <span>🔢 {tokens} tokens</span>
-                    </div>
-            """, unsafe_allow_html=True)
-
-            if docs:
-                st.markdown('<div class="src-tags">', unsafe_allow_html=True)
-                for doc in docs[:5]:
-                    url  = doc.get("url", "#")
-                    repo = doc.get("nom_complet", "N/A").split("/")[-1]
-                    lang = doc.get("langage", "")
-                    st.markdown(
-                        f'<a class="src-tag" href="{url}" target="_blank">⬡ {repo} · {lang}</a>',
-                        unsafe_allow_html=True
-                    )
-                st.markdown('</div>', unsafe_allow_html=True)
-
-            st.markdown("</div></div>", unsafe_allow_html=True)
+                # Tags sources
+                if docs:
+                    st.markdown('<div class="src-tags">', unsafe_allow_html=True)
+                    for doc in docs[:5]:
+                        url  = doc.get("url", "#")
+                        repo = doc.get("nom_complet", "N/A").split("/")[-1]
+                        lang = doc.get("langage", "")
+                        st.markdown(
+                            f'<a class="src-tag" href="{url}" target="_blank">'
+                            f'⬡ {repo} · {lang}</a>',
+                            unsafe_allow_html=True
+                        )
+                    st.markdown('</div>', unsafe_allow_html=True)
 
     if st.session_state.en_cours:
-        st.markdown("""
-        <div class="think">
-            <div class="av bot">⬡</div>
-            <div class="think-box">
-                <div class="tdots"><span></span><span></span><span></span></div>
-                <div class="tlabel">Recherche · Génération en cours…</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        with st.chat_message("assistant", avatar="🤖"):
+            st.markdown("""
+            <div class="tdots"><span></span><span></span><span></span></div>
+            <div class="tlabel">Recherche · Génération en cours…</div>
+            """, unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -515,8 +551,9 @@ with col:
 
     # Upload fichiers
     fichiers_up = st.file_uploader(
-        "📎 Joindre des fichiers (PDF, images, code, Markdown…)",
+        "📎 Joindre des fichiers ici",
         accept_multiple_files=True,
+        type=[],
         key=f"up_{st.session_state.input_key}",
         label_visibility="visible",
     )
