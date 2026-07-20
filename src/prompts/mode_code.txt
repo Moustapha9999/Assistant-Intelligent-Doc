@@ -1,0 +1,9 @@
+Mode code intelligent :
+- Donne d'abord un code complet, exécutable et commenté.
+- Puis analyse brève de ce que fait le code.
+- Explique les parties non triviales.
+- Propose des tests minimaux (cas nominal + 1 cas limite).
+- Indique 1-2 optimisations possibles.
+- Propose une alternative pertinente si elle existe.
+- Signale les erreurs fréquentes.
+- Ne livre jamais du code seul sans explication.

@@ -1,359 +1,338 @@
 """
-Module d'évaluation RAGAS du système RAG
-Métriques : Faithfulness, Answer Relevancy, Context Recall, Context Precision
+Évaluation RAGAS adaptée au compte GRATUIT Groq.
+
+Causes des scores à 0 avec l'ancienne version :
+  - Régénération + juge llama-3.3-70b → saturation TPD (100k/jour)
+  - evaluate() en parallèle → rate-limit massif
+  - AnswerRelevancy(n=3) → Groq refuse n>1
+
+Stratégie correcte :
+  - Réutilise resultats/generation/reponses_generees.json (pas de regen)
+  - Juge léger : llama-3.1-8b-instant
+  - Évaluation SÉQUENTIELLE, métrique par métrique
+  - AnswerRelevancy(strictness=1)
+  - Pause + retry sur 429
 """
 
 import os
+import re
 import json
-import yaml
+import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
 
+# Windows cp1252 ne gère pas les emojis du rapport
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 load_dotenv()
+
+PAUSE_ENTRE_APPELS = float(os.getenv("RAGAS_PAUSE", "8"))
+MAX_CHARS_REPONSE = int(os.getenv("RAGAS_MAX_CHARS_REPONSE", "900"))
+MAX_CHARS_CONTEXTE = int(os.getenv("RAGAS_MAX_CHARS_CONTEXTE", "500"))
+MAX_CONTEXTES = int(os.getenv("RAGAS_MAX_CONTEXTES", "3"))
 
 
 class EvaluateurRAGAS:
-    """
-    Évalue la qualité du système RAG via les métriques RAGAS :
-    - Faithfulness       : La réponse est-elle fidèle aux sources ?
-    - Answer Relevancy   : La réponse répond-elle à la question ?
-    - Context Recall     : Les documents récupérés couvrent-ils la réponse idéale ?
-    - Context Precision  : Les documents récupérés sont-ils tous pertinents ?
-    """
+    """Évalue Faithfulness, Answer Relevancy, Context Recall, Context Precision."""
 
     def __init__(self):
-        """Initialise l'évaluateur RAGAS avec le LLM Groq"""
-
         self.groq_api_key = os.getenv("GROQ_API_KEY")
-        self.modele       = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile")
-        self.base_dir     = Path(__file__).resolve().parent.parent.parent
+        self.modele = os.getenv("RAGAS_LLM_MODEL", "llama-3.1-8b-instant")
+        self.base_dir = Path(__file__).resolve().parent.parent.parent
         self.dossier_resultats = self.base_dir / "resultats" / "metrics"
         self.dossier_resultats.mkdir(parents=True, exist_ok=True)
 
         if not self.groq_api_key:
             raise ValueError("❌ GROQ_API_KEY manquante dans le fichier .env")
 
-        self._initialiser_ragas()
+        self._initialiser()
 
-    # ────────────────────────────────────────────────────────────────
-    # INITIALISATION RAGAS
-    # ────────────────────────────────────────────────────────────────
-
-    def _initialiser_ragas(self):
-        """Initialise les métriques et le LLM RAGAS via Groq"""
+    def _initialiser(self):
+        from ragas.metrics import Faithfulness, AnswerRelevancy, ContextRecall, ContextPrecision
+        from ragas.llms import LangchainLLMWrapper
+        from ragas.embeddings import LangchainEmbeddingsWrapper
+        from langchain_groq import ChatGroq
         try:
-            from ragas import evaluate
-            from ragas.metrics import (
-                faithfulness,
-                answer_relevancy,
-                context_recall,
-                context_precision,
-            )
-            from langchain_groq import ChatGroq
+            from langchain_huggingface import HuggingFaceEmbeddings
+        except ImportError:
             from langchain_community.embeddings import HuggingFaceEmbeddings
 
-            # LLM juge (Groq)
-            self.llm_juge = ChatGroq(
-                api_key    =self.groq_api_key,
-                model_name =self.modele,
-                temperature=0.0,
-            )
+        llm_groq = ChatGroq(
+            api_key=self.groq_api_key,
+            model=self.modele,
+            temperature=0.0,
+            max_tokens=int(os.getenv("RAGAS_MAX_TOKENS", "4096")),
+        )
+        self.llm_juge = LangchainLLMWrapper(llm_groq)
 
-            # Embeddings pour Answer Relevancy
-            cache_folder = str(self.base_dir / "models_cache")
-            self.embeddings_ragas = HuggingFaceEmbeddings(
-                model_name   ="all-MiniLM-L6-v2",
-                cache_folder =cache_folder,
-            )
+        cache_folder = str(self.base_dir / "models_cache")
+        emb = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2", cache_folder=cache_folder)
+        self.embeddings_ragas = LangchainEmbeddingsWrapper(emb)
 
-            # Métriques RAGAS
-            self.metriques = [
-                faithfulness,
-                answer_relevancy,
-                context_recall,
-                context_precision,
+        self.metriques = {
+            "faithfulness": Faithfulness(llm=self.llm_juge),
+            "answer_relevancy": AnswerRelevancy(
+                llm=self.llm_juge,
+                embeddings=self.embeddings_ragas,
+                strictness=1,
+            ),
+            "context_precision": ContextPrecision(llm=self.llm_juge),
+            "context_recall": ContextRecall(llm=self.llm_juge),
+        }
+        print(f"✅ RAGAS prêt — juge={self.modele} | strictness=1 | pause={PAUSE_ENTRE_APPELS}s")
+
+    @staticmethod
+    def _safe_float(val) -> Optional[float]:
+        try:
+            f = float(val)
+            if f != f:  # NaN
+                return None
+            return round(max(0.0, min(f, 1.0)), 4)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _preparer_sample(d: Dict):
+        from ragas.dataset_schema import SingleTurnSample
+
+        reponse = (d.get("reponse_generee") or d.get("reponse") or "")[:MAX_CHARS_REPONSE]
+        if reponse.startswith("❌") or "Rate limit" in reponse:
+            reponse = ""
+
+        contextes_bruts = d.get("contextes") or []
+        if not contextes_bruts and d.get("documents"):
+            contextes_bruts = [
+                doc.get("texte", doc.get("text", "")) for doc in d["documents"]
             ]
 
-            self.evaluate_fn = evaluate
-            print("✅ RAGAS initialisé avec succès")
+        contextes = [
+            (c or "")[:MAX_CHARS_CONTEXTE]
+            for c in contextes_bruts[:MAX_CONTEXTES]
+            if (c or "").strip()
+        ]
+        if not contextes:
+            contextes = ["(aucun contexte)"]
 
-        except ImportError as e:
-            print(f"⚠️  RAGAS non disponible : {e}")
-            print("   Installez : pip install ragas langchain-groq langchain-community")
-            self.evaluate_fn = None
-            self.metriques   = []
-
-    # ────────────────────────────────────────────────────────────────
-    # ÉVALUATION D'UN SEUL EXEMPLE
-    # ────────────────────────────────────────────────────────────────
-
-    def evaluer_exemple(
-        self,
-        question          : str,
-        reponse_generee   : str,
-        documents_contexte: List[Dict],
-        reponse_ideale    : Optional[str] = None,
-    ) -> Dict:
-        """
-        Évalue un seul exemple (question → réponse → contexte).
-
-        Args:
-            question           : Question posée par l'utilisateur
-            reponse_generee    : Réponse produite par le système RAG
-            documents_contexte : Documents récupérés par le retrieval
-            reponse_ideale     : Réponse de référence (optionnel, pour Context Recall)
-
-        Returns:
-            Dict avec les scores RAGAS et les métadonnées
-        """
-        if self.evaluate_fn is None:
-            return self._evaluer_heuristique(
-                question, reponse_generee, documents_contexte
-            )
-
-        try:
-            from datasets import Dataset
-
-            # Préparation du dataset RAGAS
-            contextes = [doc.get("texte", "")[:800] for doc in documents_contexte]
-
-            sample = {
-                "question"  : [question],
-                "answer"    : [reponse_generee],
-                "contexts"  : [contextes],
-            }
-            if reponse_ideale:
-                sample["ground_truth"] = [reponse_ideale]
-
-            dataset = Dataset.from_dict(sample)
-
-            # Sélection des métriques selon disponibilité de ground_truth
-            metriques_actives = (
-                self.metriques
-                if reponse_ideale
-                else [m for m in self.metriques if m.name not in
-                      ("context_recall", "context_precision")]
-            )
-
-            # Évaluation RAGAS
-            resultats = self.evaluate_fn(
-                dataset   =dataset,
-                metrics   =metriques_actives,
-                llm       =self.llm_juge,
-                embeddings=self.embeddings_ragas,
-            )
-
-            scores = resultats.to_pandas().iloc[0].to_dict()
-
-            return {
-                "question"          : question,
-                "reponse"           : reponse_generee,
-                "nb_documents"      : len(documents_contexte),
-                "faithfulness"      : round(float(scores.get("faithfulness",      0)), 4),
-                "answer_relevancy"  : round(float(scores.get("answer_relevancy",  0)), 4),
-                "context_recall"    : round(float(scores.get("context_recall",    0)), 4),
-                "context_precision" : round(float(scores.get("context_precision", 0)), 4),
-                "methode"           : "ragas",
-                "timestamp"         : datetime.now().isoformat(),
-            }
-
-        except Exception as e:
-            print(f"   ⚠️  Erreur RAGAS : {e} → bascule sur heuristique")
-            return self._evaluer_heuristique(
-                question, reponse_generee, documents_contexte
-            )
-
-    # ────────────────────────────────────────────────────────────────
-    # ÉVALUATION HEURISTIQUE (fallback sans RAGAS)
-    # ────────────────────────────────────────────────────────────────
-
-    def _evaluer_heuristique(
-        self,
-        question          : str,
-        reponse           : str,
-        documents_contexte: List[Dict],
-    ) -> Dict:
-        """
-        Évaluation heuristique légère si RAGAS n'est pas disponible.
-        Calcule des proxys simples basés sur le chevauchement de tokens.
-        """
-        tokens_question = set(question.lower().split())
-        tokens_reponse  = set(reponse.lower().split())
-
-        # Proxy Faithfulness : taux de mots de la réponse présents dans le contexte
-        texte_contexte  = " ".join(d.get("texte", "") for d in documents_contexte).lower()
-        tokens_contexte = set(texte_contexte.split())
-        communs_rep_ctx = tokens_reponse & tokens_contexte
-        faithfulness_proxy = (
-            len(communs_rep_ctx) / len(tokens_reponse)
-            if tokens_reponse else 0.0
+        return SingleTurnSample(
+            user_input=d["question"],
+            response=reponse or "(réponse indisponible)",
+            retrieved_contexts=contextes,
+            reference=d.get("reponse_ideale") or "",
         )
 
-        # Proxy Answer Relevancy : chevauchement question/réponse
-        communs_q_rep = tokens_question & tokens_reponse
-        relevancy_proxy = (
-            len(communs_q_rep) / len(tokens_question)
-            if tokens_question else 0.0
-        )
+    def _evaluer_une_metrique(self, metrique, sample) -> Optional[float]:
+        for _ in range(5):
+            try:
+                score = metrique.single_turn_score(sample)
+                return self._safe_float(score)
+            except Exception as e:
+                msg = str(e)
+                if "429" in msg or "rate_limit" in msg.lower():
+                    m = re.search(r"try again in (?:([\d.]+)m)?([\d.]+)s", msg, re.I)
+                    if m:
+                        attente = float(m.group(1) or 0) * 60 + float(m.group(2) or 0) + 3
+                    else:
+                        attente = 45
+                    attente = min(max(attente, 15), 300)
+                    print(f"        ⏳ Rate-limit, pause {attente:.0f}s...")
+                    time.sleep(attente)
+                elif "'n'" in msg or "must be at most 1" in msg:
+                    print(f"        ⚠️  Groq n>1 : {msg[:80]}")
+                    return None
+                else:
+                    print(f"        ⚠️  Erreur : {msg[:120]}")
+                    return None
+        return None
 
-        # Proxy Context Precision : % de documents ayant des mots de la question
-        nb_pertinents = sum(
-            1 for d in documents_contexte
-            if tokens_question & set(d.get("texte", "").lower().split())
-        )
-        precision_proxy = (
-            nb_pertinents / len(documents_contexte)
-            if documents_contexte else 0.0
-        )
+    def charger_dataset_test(self) -> List[Dict]:
+        """5 questions (aligné sur 1_generer_reponses.py)."""
+        return [
+            {
+                "question": "Comment créer une API REST avec Flask en Python ?",
+                "reponse_ideale": (
+                    "Flask est un micro-framework Python. On crée une API REST en définissant "
+                    "des routes avec les décorateurs @app.route() et en retournant des données "
+                    "au format JSON via jsonify()."
+                ),
+            },
+            {
+                "question": "Comment gérer l'authentification JWT dans une application web ?",
+                "reponse_ideale": (
+                    "JWT (JSON Web Token) est utilisé pour l'authentification. On génère un token "
+                    "signé avec une clé secrète lors de la connexion, puis on le vérifie à chaque "
+                    "requête protégée."
+                ),
+            },
+            {
+                "question": "Comment créer une API avec FastAPI en Python ?",
+                "reponse_ideale": (
+                    "FastAPI est un framework Python moderne pour créer des API. On définit des "
+                    "routes avec des décorateurs comme @app.get() et @app.post(), avec validation "
+                    "automatique via des modèles Pydantic."
+                ),
+            },
+            {
+                "question": "Comment utiliser les hooks dans React ?",
+                "reponse_ideale": (
+                    "Les hooks React comme useState et useEffect permettent d'utiliser l'état "
+                    "local et les effets de bord dans les composants fonctionnels, sans recourir "
+                    "aux classes."
+                ),
+            },
+            {
+                "question": "Comment valider un payload avec Pydantic dans FastAPI ?",
+                "reponse_ideale": (
+                    "Dans FastAPI, on définit un modèle Pydantic (BaseModel) avec les champs "
+                    "attendus ; FastAPI valide automatiquement le payload de la requête grâce "
+                    "à ce modèle."
+                ),
+            },
+        ]
 
-        return {
-            "question"          : question,
-            "reponse"           : reponse,
-            "nb_documents"      : len(documents_contexte),
-            "faithfulness"      : round(min(faithfulness_proxy, 1.0), 4),
-            "answer_relevancy"  : round(min(relevancy_proxy * 2, 1.0), 4),
-            "context_recall"    : 0.0,
-            "context_precision" : round(precision_proxy, 4),
-            "methode"           : "heuristique",
-            "timestamp"         : datetime.now().isoformat(),
-        }
+    def evaluer_depuis_fichier(self, fichier: Path) -> Dict:
+        with open(fichier, "r", encoding="utf-8") as f:
+            paquet = json.load(f)
 
-    # ────────────────────────────────────────────────────────────────
-    # ÉVALUATION D'UN JEU DE DONNÉES COMPLET
-    # ────────────────────────────────────────────────────────────────
+        donnees = paquet["donnees"]
+        # Filtrer les réponses en erreur (rate-limit) pour ne pas polluer les scores
+        valides = [
+            d for d in donnees
+            if d.get("reponse_generee")
+            and not str(d["reponse_generee"]).startswith("❌")
+            and "Rate limit" not in str(d["reponse_generee"])
+        ]
+        if len(valides) < len(donnees):
+            print(f"⚠️  {len(donnees) - len(valides)} réponse(s) en erreur ignorée(s)")
+        if not valides:
+            raise ValueError(
+                "Aucune réponse valide à évaluer. Relance : python src/evaluation/1_generer_reponses.py"
+            )
+
+        print(f"\n📂 {len(valides)} réponses valides depuis {fichier.name}")
+        print(f"   Évaluation séquentielle (pause {PAUSE_ENTRE_APPELS}s)")
+        print(f"   ⏳ Temps estimé : ~{len(valides) * 4 * PAUSE_ENTRE_APPELS / 60:.0f} min\n")
+
+        detail = []
+        fichier_partiel = self.dossier_resultats / "ragas_partiel.json"
+
+        for i, d in enumerate(valides, 1):
+            print(f"[{i}/{len(valides)}] {d['question'][:55]}")
+            sample = self._preparer_sample(d)
+            scores = {"question": d["question"], "latence_sec": d.get("latence_sec")}
+
+            for nom, metrique in self.metriques.items():
+                score = self._evaluer_une_metrique(metrique, sample)
+                scores[nom] = score
+                etiquette = f"{score:.3f}" if score is not None else "—"
+                print(f"        {nom:20s} = {etiquette}")
+                time.sleep(PAUSE_ENTRE_APPELS)
+
+            detail.append(scores)
+            with open(fichier_partiel, "w", encoding="utf-8") as f:
+                json.dump(detail, f, ensure_ascii=False, indent=2)
+            print("         sauvegarde partielle OK\n")
+
+        return self._finaliser(detail, paquet)
 
     def evaluer_dataset(
         self,
-        questions         : List[str],
-        reponses          : List[str],
-        documents_listes  : List[List[Dict]],
-        reponses_ideales  : Optional[List[str]] = None,
+        questions: List[str],
+        reponses: List[str],
+        documents_listes: List[List[Dict]],
+        reponses_ideales: Optional[List[str]] = None,
+        sauvegarder: bool = True,
     ) -> Dict:
-        """
-        Évalue un jeu de données complet et calcule les moyennes.
+        """API compat : convertit en échantillons et évalue séquentiellement."""
+        donnees = []
+        for i, q in enumerate(questions):
+            docs = documents_listes[i] if i < len(documents_listes) else []
+            donnees.append({
+                "question": q,
+                "reponse_generee": reponses[i] if i < len(reponses) else "",
+                "reponse_ideale": (reponses_ideales or [""])[i] if reponses_ideales else "",
+                "contextes": [d.get("texte", d.get("text", "")) for d in docs],
+            })
+        paquet = {"donnees": donnees, "latence_moyenne": None}
+        tmp = self.dossier_resultats / "_tmp_eval_dataset.json"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(paquet, f, ensure_ascii=False)
+        rapport = self.evaluer_depuis_fichier(tmp)
+        tmp.unlink(missing_ok=True)
+        if not sauvegarder:
+            return rapport
+        return rapport
 
-        Returns:
-            Dict avec scores moyens + résultats détaillés par exemple
-        """
-        print(f"\n📊 Évaluation de {len(questions)} exemples...")
-        resultats_detail = []
-
-        for i, (question, reponse, documents) in enumerate(
-            zip(questions, reponses, documents_listes), 1
-        ):
-            print(f"   [{i}/{len(questions)}] {question[:60]}...")
-            ref = reponses_ideales[i - 1] if reponses_ideales else None
-            res = self.evaluer_exemple(question, reponse, documents, ref)
-            resultats_detail.append(res)
-
-        # Calcul des moyennes
+    def _finaliser(self, detail: List[Dict], paquet: Dict) -> Dict:
         def moyenne(cle):
-            vals = [r[cle] for r in resultats_detail if r[cle] > 0]
+            vals = [d[cle] for d in detail if d.get(cle) is not None]
             return round(sum(vals) / len(vals), 4) if vals else 0.0
 
+        def taux_succes(cle):
+            total = len(detail)
+            ok = sum(1 for d in detail if d.get(cle) is not None)
+            return round(ok / total, 2) if total else 0.0
+
         rapport = {
-            "nb_exemples"       : len(questions),
-            "faithfulness_moy"  : moyenne("faithfulness"),
-            "relevancy_moy"     : moyenne("answer_relevancy"),
-            "recall_moy"        : moyenne("context_recall"),
-            "precision_moy"     : moyenne("context_precision"),
-            "score_global"      : round(
-                (moyenne("faithfulness") + moyenne("answer_relevancy")) / 2, 4
-            ),
-            "resultats_detail"  : resultats_detail,
-            "timestamp"         : datetime.now().isoformat(),
+            "nb_exemples": len(detail),
+            "faithfulness_moy": moyenne("faithfulness"),
+            "relevancy_moy": moyenne("answer_relevancy"),
+            "precision_moy": moyenne("context_precision"),
+            "recall_moy": moyenne("context_recall"),
+            "latence_moyenne": paquet.get("latence_moyenne"),
+            "taux_mesure": {
+                "faithfulness": taux_succes("faithfulness"),
+                "answer_relevancy": taux_succes("answer_relevancy"),
+                "context_precision": taux_succes("context_precision"),
+                "context_recall": taux_succes("context_recall"),
+            },
+            "resultats_detail": detail,
+            "timestamp": datetime.now().isoformat(),
         }
+        rapport["score_global"] = round(
+            (
+                rapport["faithfulness_moy"]
+                + rapport["relevancy_moy"]
+                + rapport["precision_moy"]
+                + rapport["recall_moy"]
+            )
+            / 4,
+            4,
+        )
 
         self._sauvegarder_rapport(rapport)
         self.afficher_rapport(rapport)
         return rapport
 
-    # ────────────────────────────────────────────────────────────────
-    # JEU DE TEST PAR DÉFAUT (10 questions ISI KOMUNIK)
-    # ────────────────────────────────────────────────────────────────
-
-    def charger_dataset_test(self) -> List[Dict]:
-        """
-        Retourne un jeu de 10 questions de test représentatives
-        du contexte ISI KOMUNIK.
-        """
-        return [
-            {
-                "question"       : "Comment créer une API REST avec Flask en Python ?",
-                "reponse_ideale" : "Flask est un micro-framework Python. On crée une API REST en définissant des routes avec les décorateurs @app.route().",
-            },
-            {
-                "question"       : "Comment gérer l'authentification JWT dans une application web ?",
-                "reponse_ideale" : "JWT (JSON Web Token) est utilisé pour l'authentification. On génère un token signé avec une clé secrète.",
-            },
-            {
-                "question"       : "Comment optimiser les requêtes SQL dans Django ?",
-                "reponse_ideale" : "Django ORM permet d'optimiser avec select_related(), prefetch_related() et values() pour réduire les requêtes N+1.",
-            },
-            {
-                "question"       : "Comment utiliser les hooks dans React ?",
-                "reponse_ideale" : "Les hooks React (useState, useEffect) permettent d'utiliser l'état et le cycle de vie dans les composants fonctionnels.",
-            },
-            {
-                "question"       : "Comment gérer les erreurs avec try/catch en JavaScript ?",
-                "reponse_ideale" : "Le bloc try/catch permet de capturer les exceptions. On utilise throw pour lever des erreurs personnalisées.",
-            },
-            {
-                "question"       : "Comment créer un middleware dans Express.js ?",
-                "reponse_ideale" : "Un middleware Express est une fonction (req, res, next) qui s'exécute entre la requête et la réponse.",
-            },
-            {
-                "question"       : "Comment lire et écrire des fichiers en Python ?",
-                "reponse_ideale" : "Python utilise open() avec les modes 'r', 'w', 'a'. Le gestionnaire with garantit la fermeture du fichier.",
-            },
-            {
-                "question"       : "Comment faire du scraping web avec BeautifulSoup ?",
-                "reponse_ideale" : "BeautifulSoup parse le HTML. On utilise find() et find_all() pour extraire les éléments.",
-            },
-            {
-                "question"       : "Comment gérer les dépendances avec npm en JavaScript ?",
-                "reponse_ideale" : "npm install ajoute des dépendances dans package.json. --save-dev pour les dépendances de développement.",
-            },
-            {
-                "question"       : "Comment créer une connexion à une base de données avec SQLAlchemy ?",
-                "reponse_ideale" : "SQLAlchemy utilise create_engine() avec l'URL de connexion. Session gère les transactions.",
-            },
-        ]
-
-    # ────────────────────────────────────────────────────────────────
-    # SAUVEGARDE DU RAPPORT
-    # ────────────────────────────────────────────────────────────────
-
     def _sauvegarder_rapport(self, rapport: Dict) -> None:
-        """Sauvegarde le rapport d'évaluation en JSON"""
         horodatage = datetime.now().strftime("%Y%m%d_%H%M%S")
-        fichier    = self.dossier_resultats / f"evaluation_{horodatage}.json"
-
+        fichier = self.dossier_resultats / f"evaluation_{horodatage}.json"
         with open(fichier, "w", encoding="utf-8") as f:
             json.dump(rapport, f, ensure_ascii=False, indent=2)
-
-        print(f"\n💾 Rapport sauvegardé : {fichier}")
-
-    # ────────────────────────────────────────────────────────────────
-    # AFFICHAGE DU RAPPORT
-    # ────────────────────────────────────────────────────────────────
+        # Alias stable pour le pipeline 2 étapes
+        alias = self.dossier_resultats / f"ragas_final_{horodatage}.json"
+        with open(alias, "w", encoding="utf-8") as f:
+            json.dump(rapport, f, ensure_ascii=False, indent=2)
+        print(f"\n💾 Rapport : {fichier}")
 
     def afficher_rapport(self, rapport: Dict) -> None:
-        """Affiche le rapport d'évaluation dans le terminal"""
         print("\n" + "═" * 60)
         print("📊 RAPPORT D'ÉVALUATION RAGAS")
         print("═" * 60)
         print(f"  Exemples évalués   : {rapport['nb_exemples']}")
         print(f"  Faithfulness       : {rapport['faithfulness_moy']:.4f}  (cible > 0.90)")
         print(f"  Answer Relevancy   : {rapport['relevancy_moy']:.4f}  (cible > 0.80)")
-        print(f"  Context Recall     : {rapport['recall_moy']:.4f}  (cible > 0.75)")
         print(f"  Context Precision  : {rapport['precision_moy']:.4f}  (cible > 0.80)")
-        print(f"  ─────────────────────────────────────────────")
+        print(f"  Context Recall     : {rapport['recall_moy']:.4f}  (cible > 0.75)")
+        if rapport.get("latence_moyenne"):
+            print(f"  Latence moyenne    : {rapport['latence_moyenne']:.2f}s")
+        print("  ─────────────────────────────────────────────")
         print(f"  Score global       : {rapport['score_global']:.4f}")
-
-        # Indicateur visuel
         score = rapport["score_global"]
         if score >= 0.90:
             niveau = "🟢 Excellent"
@@ -363,52 +342,16 @@ class EvaluateurRAGAS:
             niveau = "🟠 Acceptable"
         else:
             niveau = "🔴 À améliorer"
-
         print(f"  Niveau             : {niveau}")
         print("═" * 60 + "\n")
 
 
-# ────────────────────────────────────────────────────────────────────
-# TEST RAPIDE
-# ────────────────────────────────────────────────────────────────────
-
 if __name__ == "__main__":
-    import sys
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    base_dir = Path(__file__).resolve().parent.parent.parent
+    fichier = base_dir / "resultats" / "generation" / "reponses_generees.json"
 
-    from retrieval.retrieval_hybride import RetrievalHybride
-    from generation.generateur_reponse import GenerateurReponse
-
-    moteur     = RetrievalHybride()
-    generateur = GenerateurReponse()
-    evaluateur = EvaluateurRAGAS()
-
-    # Charger le jeu de test
-    dataset = evaluateur.charger_dataset_test()
-
-    questions        = []
-    reponses         = []
-    documents_listes = []
-    reponses_ideales = []
-
-    print(f"\n🔄 Génération des réponses pour {len(dataset)} questions...")
-
-    for exemple in dataset:
-        question = exemple["question"]
-        print(f"   → {question[:60]}...")
-
-        docs     = moteur.rechercher(question, top_k_retrieval=20, top_k_final=5)
-        resultat = generateur.generer(question, docs)
-
-        questions.append(question)
-        reponses.append(resultat["reponse_seule"])
-        documents_listes.append(docs)
-        reponses_ideales.append(exemple.get("reponse_ideale", ""))
-
-    # Évaluation RAGAS
-    rapport = evaluateur.evaluer_dataset(
-        questions        =questions,
-        reponses         =reponses,
-        documents_listes =documents_listes,
-        reponses_ideales =reponses_ideales,
-    )
+    if not fichier.exists():
+        print(f"❌ Fichier introuvable : {fichier}")
+        print("   Lance d'abord : python src/evaluation/1_generer_reponses.py")
+    else:
+        EvaluateurRAGAS().evaluer_depuis_fichier(fichier)

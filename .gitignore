@@ -25,29 +25,27 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-
 .env
+.env.local
 models_cache/
 
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Environment variables
-.env
-.env.example
-.env.local
-
 # Data (trop volumineux pour GitHub)
 data/raw/
 data/processed/
 data/embeddings/
+data/app/
 
 # Results
 resultats/
 
+# Logs d'amélioration
+logs/
+
 # IDE
 .vscode/
-
 
 # OS
 .DS_Store
@@ -55,3 +53,4 @@ Thumbs.db
 
 # Qdrant
 qdrant_data/
+qdrant_storage/

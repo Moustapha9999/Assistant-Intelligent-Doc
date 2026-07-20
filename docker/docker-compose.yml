@@ -2,6 +2,26 @@
 
 services:
 
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: assistant_intelligent_doc
+    restart: unless-stopped
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    ports:
+      - "8501:8501"
+    env_file:
+      - ../.env
+    environment:
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+    volumes:
+      - ../data:/app/data
+      - ../models_cache:/app/models_cache
+
   # ── Base vectorielle Qdrant ──────────────────────────
   qdrant:
     image: qdrant/qdrant:latest

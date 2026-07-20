@@ -1,0 +1,3856 @@
+{
+  "date_utc": "2026-07-16T15:11:53.651325+00:00",
+  "top_k": 5,
+  "nombre_questions": 52,
+  "pipeline": "rewrite+theme+compression+hybride",
+  "ablations": {
+    "dense_sans_rerank": {
+      "mode": "dense",
+      "avec_rerank": false,
+      "precision_at_k": 0.4615,
+      "mrr": 0.3917,
+      "details": [
+        {
+          "id": "flask_01",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "flask",
+            "fastapi",
+            "flask",
+            "fastapi",
+            "flask"
+          ]
+        },
+        {
+          "id": "flask_02",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "flask",
+            "fastapi",
+            "flask",
+            "fastapi",
+            "flask"
+          ]
+        },
+        {
+          "id": "flask_03",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "flask",
+            "fastapi",
+            "flask",
+            "fastapi",
+            "flask"
+          ]
+        },
+        {
+          "id": "fastapi_01",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "fastapi",
+            "docker",
+            "fastapi",
+            "fastapi",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "fastapi_02",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "fastapi",
+            "docker",
+            "fastapi",
+            "fastapi",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "fastapi_03",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "fastapi",
+            "docker",
+            "fastapi",
+            "fastapi",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "django_01",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "django",
+            "sql",
+            "django",
+            "sql",
+            "django"
+          ]
+        },
+        {
+          "id": "django_02",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "django",
+            "sql",
+            "django",
+            "sql",
+            "django"
+          ]
+        },
+        {
+          "id": "django_03",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "django",
+            "sql",
+            "django",
+            "sql",
+            "django"
+          ]
+        },
+        {
+          "id": "jwt_01",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "jwt",
+            "jwt",
+            "jwt",
+            "jwt",
+            "jwt"
+          ]
+        },
+        {
+          "id": "jwt_02",
+          "techno": "JWT",
+          "rang": 5,
+          "hit": true,
+          "themes": [
+            "jwt",
+            "jwt",
+            "jwt",
+            "jwt",
+            "jwt"
+          ]
+        },
+        {
+          "id": "jwt_03",
+          "techno": "JWT",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "jwt",
+            "security",
+            "jwt",
+            "jwt",
+            "jwt"
+          ]
+        },
+        {
+          "id": "react_01",
+          "techno": "React",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "react",
+            "react",
+            "react",
+            "react",
+            "react"
+          ]
+        },
+        {
+          "id": "react_02",
+          "techno": "React",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general"
+          ]
+        },
+        {
+          "id": "react_03",
+          "techno": "React",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "react",
+            "react",
+            "react",
+            "react",
+            "react"
+          ]
+        },
+        {
+          "id": "docker_01",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "docker",
+            "docker",
+            "docker",
+            "docker",
+            "docker"
+          ]
+        },
+        {
+          "id": "docker_02",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "docker",
+            "docker",
+            "docker",
+            "docker",
+            "docker"
+          ]
+        },
+        {
+          "id": "docker_03",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "docker",
+            "docker",
+            "docker",
+            "docker",
+            "docker"
+          ]
+        },
+        {
+          "id": "python_files_01",
+          "techno": "Python",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "python_files_02",
+          "techno": "Python",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "python_files_03",
+          "techno": "Python",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general",
+            "general"
+          ]
+        },
+        {
+          "id": "sql_01",
+          "techno": "SQL",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "security"
+          ]
+        },
+        {
+          "id": "sql_02",
+          "techno": "SQL",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "sql_03",
+          "techno": "SQL",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "git_01",
+          "techno": "Git",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "general",
+            "sql",
+            "python",
+            "general",
+            "sql"
+          ]
+        },
+        {
+          "id": "git_02",
+          "techno": "Git",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "python",
+            "general",
+            "general"
+          ]
+        },
+        {
+          "id": "git_03",
+          "techno": "Git",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "jwt"
+          ]
+        },
+        {
+          "id": "solid_01",
+          "techno": "SOLID",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "python",
+            "general",
+            "general"
+          ]
+        },
+        {
+          "id": "solid_02",
+          "techno": "SOLID",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "sql"
+          ]
+        },
+        {
+          "id": "security_01",
+          "techno": "Sécurité",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "python",
+            "general",
+            "security",
+            "fastapi",
+            "python"
+          ]
+        },
+        {
+          "id": "security_02",
+          "techno": "Sécurité",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "jwt",
+            "python"
+          ]
+        },
+        {
+          "id": "security_03",
+          "techno": "Sécurité",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "sql",
+            "security"
+          ]
+        },
+        {
+          "id": "rag_01",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "react"
+          ]
+        },
+        {
+          "id": "rag_02",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general",
+            "general"
+          ]
+        },
+        {
+          "id": "rag_03",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "streamlit_01",
+          "techno": "Streamlit",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general",
+            "general"
+          ]
+        },
+        {
+          "id": "streamlit_02",
+          "techno": "Streamlit",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general",
+            "general"
+          ]
+        },
+        {
+          "id": "qdrant_01",
+          "techno": "Qdrant",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "qdrant_02",
+          "techno": "Qdrant",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "embeddings_01",
+          "techno": "Embeddings",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "general",
+            "jwt",
+            "sql",
+            "docker",
+            "python"
+          ]
+        },
+        {
+          "id": "embeddings_02",
+          "techno": "Embeddings",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "pytest_01",
+          "techno": "Pytest",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general"
+          ]
+        },
+        {
+          "id": "pytest_02",
+          "techno": "Pytest",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general"
+          ]
+        },
+        {
+          "id": "ci_01",
+          "techno": "CI",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "ci_02",
+          "techno": "CI",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "architecture_01",
+          "techno": "Architecture",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "architecture_02",
+          "techno": "Architecture",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "architecture_03",
+          "techno": "Architecture",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general",
+            "react",
+            "general",
+            "general",
+            "general"
+          ]
+        },
+        {
+          "id": "mentor_01",
+          "techno": "Mentorat",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "general",
+            "sql",
+            "react",
+            "python",
+            "general"
+          ]
+        },
+        {
+          "id": "mentor_02",
+          "techno": "Mentorat",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general",
+            "python",
+            "sql",
+            "docker",
+            "general"
+          ]
+        },
+        {
+          "id": "roadmap_01",
+          "techno": "Roadmap",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "roadmap_02",
+          "techno": "Roadmap",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "general",
+            "sql",
+            "python",
+            "security",
+            "fastapi"
+          ]
+        }
+      ]
+    },
+    "dense_avec_rerank": {
+      "mode": "dense",
+      "avec_rerank": true,
+      "precision_at_k": 0.4615,
+      "mrr": 0.4375,
+      "details": [
+        {
+          "id": "flask_01",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "flask",
+            "fastapi",
+            "flask",
+            "fastapi",
+            "flask"
+          ]
+        },
+        {
+          "id": "flask_02",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "flask",
+            "fastapi",
+            "flask",
+            "fastapi",
+            "flask"
+          ]
+        },
+        {
+          "id": "flask_03",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "flask",
+            "fastapi",
+            "flask",
+            "fastapi",
+            "flask"
+          ]
+        },
+        {
+          "id": "fastapi_01",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "docker",
+            "fastapi",
+            "fastapi",
+            "fastapi",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "fastapi_02",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "fastapi",
+            "docker",
+            "fastapi",
+            "fastapi",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "fastapi_03",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "docker",
+            "fastapi",
+            "fastapi",
+            "fastapi",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "django_01",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "django",
+            "sql",
+            "django",
+            "sql",
+            "django"
+          ]
+        },
+        {
+          "id": "django_02",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "django",
+            "sql",
+            "django",
+            "sql",
+            "django"
+          ]
+        },
+        {
+          "id": "django_03",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "django",
+            "sql",
+            "django",
+            "sql",
+            "django"
+          ]
+        },
+        {
+          "id": "jwt_01",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "jwt",
+            "jwt",
+            "jwt",
+            "jwt",
+            "jwt"
+          ]
+        },
+        {
+          "id": "jwt_02",
+          "techno": "JWT",
+          "rang": 4,
+          "hit": true,
+          "themes": [
+            "jwt",
+            "jwt",
+            "jwt",
+            "jwt",
+            "jwt"
+          ]
+        },
+        {
+          "id": "jwt_03",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "jwt",
+            "security",
+            "jwt",
+            "jwt",
+            "jwt"
+          ]
+        },
+        {
+          "id": "react_01",
+          "techno": "React",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "react",
+            "react",
+            "react",
+            "react",
+            "react"
+          ]
+        },
+        {
+          "id": "react_02",
+          "techno": "React",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general"
+          ]
+        },
+        {
+          "id": "react_03",
+          "techno": "React",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "react",
+            "react",
+            "react",
+            "react",
+            "react"
+          ]
+        },
+        {
+          "id": "docker_01",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "docker",
+            "docker",
+            "docker",
+            "docker",
+            "docker"
+          ]
+        },
+        {
+          "id": "docker_02",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "docker",
+            "docker",
+            "docker",
+            "docker",
+            "docker"
+          ]
+        },
+        {
+          "id": "docker_03",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "docker",
+            "docker",
+            "docker",
+            "docker",
+            "docker"
+          ]
+        },
+        {
+          "id": "python_files_01",
+          "techno": "Python",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "python_files_02",
+          "techno": "Python",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "python_files_03",
+          "techno": "Python",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general",
+            "general"
+          ]
+        },
+        {
+          "id": "sql_01",
+          "techno": "SQL",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "security"
+          ]
+        },
+        {
+          "id": "sql_02",
+          "techno": "SQL",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "sql_03",
+          "techno": "SQL",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "git_01",
+          "techno": "Git",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "sql",
+            "general",
+            "python",
+            "sql",
+            "general"
+          ]
+        },
+        {
+          "id": "git_02",
+          "techno": "Git",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general",
+            "python",
+            "general"
+          ]
+        },
+        {
+          "id": "git_03",
+          "techno": "Git",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "jwt"
+          ]
+        },
+        {
+          "id": "solid_01",
+          "techno": "SOLID",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "general",
+            "python",
+            "general"
+          ]
+        },
+        {
+          "id": "solid_02",
+          "techno": "SOLID",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "sql"
+          ]
+        },
+        {
+          "id": "security_01",
+          "techno": "Sécurité",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general",
+            "security",
+            "python",
+            "fastapi",
+            "general"
+          ]
+        },
+        {
+          "id": "security_02",
+          "techno": "Sécurité",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "jwt",
+            "python"
+          ]
+        },
+        {
+          "id": "security_03",
+          "techno": "Sécurité",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "sql",
+            "security"
+          ]
+        },
+        {
+          "id": "rag_01",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "react"
+          ]
+        },
+        {
+          "id": "rag_02",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general",
+            "general"
+          ]
+        },
+        {
+          "id": "rag_03",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "streamlit_01",
+          "techno": "Streamlit",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general",
+            "general"
+          ]
+        },
+        {
+          "id": "streamlit_02",
+          "techno": "Streamlit",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general",
+            "general"
+          ]
+        },
+        {
+          "id": "qdrant_01",
+          "techno": "Qdrant",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "qdrant_02",
+          "techno": "Qdrant",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "embeddings_01",
+          "techno": "Embeddings",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "jwt",
+            "react",
+            "general",
+            "python",
+            "sql"
+          ]
+        },
+        {
+          "id": "embeddings_02",
+          "techno": "Embeddings",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "pytest_01",
+          "techno": "Pytest",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general"
+          ]
+        },
+        {
+          "id": "pytest_02",
+          "techno": "Pytest",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general"
+          ]
+        },
+        {
+          "id": "ci_01",
+          "techno": "CI",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "ci_02",
+          "techno": "CI",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "architecture_01",
+          "techno": "Architecture",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "architecture_02",
+          "techno": "Architecture",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "architecture_03",
+          "techno": "Architecture",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general",
+            "react",
+            "general",
+            "general",
+            "general"
+          ]
+        },
+        {
+          "id": "mentor_01",
+          "techno": "Mentorat",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "general",
+            "sql",
+            "python",
+            "react",
+            "general"
+          ]
+        },
+        {
+          "id": "mentor_02",
+          "techno": "Mentorat",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general",
+            "docker",
+            "sql",
+            "python",
+            "general"
+          ]
+        },
+        {
+          "id": "roadmap_01",
+          "techno": "Roadmap",
+          "rang": null,
+          "hit": false,
+          "themes": []
+        },
+        {
+          "id": "roadmap_02",
+          "techno": "Roadmap",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "sql",
+            "python",
+            "fastapi",
+            "general",
+            "security"
+          ]
+        }
+      ]
+    },
+    "bm25_sans_rerank": {
+      "mode": "bm25",
+      "avec_rerank": false,
+      "precision_at_k": 0.8846,
+      "mrr": 0.6641,
+      "details": [
+        {
+          "id": "flask_01",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "flask",
+            "fastapi",
+            "jwt",
+            "flask",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "flask_02",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "flask",
+            "fastapi",
+            "flask",
+            "fastapi",
+            "flask"
+          ]
+        },
+        {
+          "id": "flask_03",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "flask",
+            "fastapi",
+            "jwt",
+            "flask",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "fastapi_01",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "fastapi",
+            "sql",
+            "docker",
+            "fastapi",
+            "docker"
+          ]
+        },
+        {
+          "id": "fastapi_02",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "fastapi",
+            "python",
+            "docker",
+            "fastapi",
+            "python"
+          ]
+        },
+        {
+          "id": "fastapi_03",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "fastapi",
+            "sql",
+            "docker",
+            "fastapi",
+            "docker"
+          ]
+        },
+        {
+          "id": "django_01",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "django",
+            "react",
+            "sql",
+            "docker",
+            "python"
+          ]
+        },
+        {
+          "id": "django_02",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "django",
+            "python",
+            "sql",
+            "fastapi",
+            "django"
+          ]
+        },
+        {
+          "id": "django_03",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "django",
+            "python",
+            "sql",
+            "fastapi",
+            "django"
+          ]
+        },
+        {
+          "id": "jwt_01",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "jwt",
+            "security",
+            "jwt",
+            "security",
+            "jwt"
+          ]
+        },
+        {
+          "id": "jwt_02",
+          "techno": "JWT",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "jwt",
+            "security",
+            "jwt",
+            "security",
+            "jwt"
+          ]
+        },
+        {
+          "id": "jwt_03",
+          "techno": "JWT",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "jwt",
+            "security",
+            "jwt",
+            "security",
+            "jwt"
+          ]
+        },
+        {
+          "id": "react_01",
+          "techno": "React",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "react",
+            "react",
+            "react",
+            "react",
+            "react"
+          ]
+        },
+        {
+          "id": "react_02",
+          "techno": "React",
+          "rang": 4,
+          "hit": true,
+          "themes": [
+            "sql",
+            "python",
+            "general",
+            "react",
+            "jwt"
+          ]
+        },
+        {
+          "id": "react_03",
+          "techno": "React",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "react",
+            "react",
+            "react",
+            "react",
+            "react"
+          ]
+        },
+        {
+          "id": "docker_01",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "docker",
+            "python",
+            "docker",
+            "docker",
+            "docker"
+          ]
+        },
+        {
+          "id": "docker_02",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "docker",
+            "docker",
+            "docker",
+            "docker",
+            "docker"
+          ]
+        },
+        {
+          "id": "docker_03",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "docker",
+            "docker",
+            "docker",
+            "docker",
+            "docker"
+          ]
+        },
+        {
+          "id": "python_files_01",
+          "techno": "Python",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "sql",
+            "python",
+            "sql",
+            "python",
+            "python"
+          ]
+        },
+        {
+          "id": "python_files_02",
+          "techno": "Python",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "sql",
+            "python",
+            "python",
+            "python",
+            "python"
+          ]
+        },
+        {
+          "id": "python_files_03",
+          "techno": "Python",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "general",
+            "sql",
+            "docker",
+            "python",
+            "react"
+          ]
+        },
+        {
+          "id": "sql_01",
+          "techno": "SQL",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "python",
+            "docker",
+            "sql",
+            "security",
+            "general"
+          ]
+        },
+        {
+          "id": "sql_02",
+          "techno": "SQL",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "python",
+            "sql",
+            "docker",
+            "general",
+            "python"
+          ]
+        },
+        {
+          "id": "sql_03",
+          "techno": "SQL",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "sql",
+            "python",
+            "flask",
+            "react",
+            "general"
+          ]
+        },
+        {
+          "id": "git_01",
+          "techno": "Git",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "general",
+            "sql",
+            "python",
+            "general",
+            "sql"
+          ]
+        },
+        {
+          "id": "git_02",
+          "techno": "Git",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "python",
+            "general",
+            "sql",
+            "docker",
+            "jwt"
+          ]
+        },
+        {
+          "id": "git_03",
+          "techno": "Git",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "general",
+            "python",
+            "sql",
+            "general",
+            "python"
+          ]
+        },
+        {
+          "id": "solid_01",
+          "techno": "SOLID",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "general",
+            "react",
+            "python",
+            "sql",
+            "architecture"
+          ]
+        },
+        {
+          "id": "solid_02",
+          "techno": "SOLID",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "python",
+            "architecture",
+            "docker",
+            "sql",
+            "general"
+          ]
+        },
+        {
+          "id": "security_01",
+          "techno": "Sécurité",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "sql",
+            "jwt",
+            "general",
+            "docker"
+          ]
+        },
+        {
+          "id": "security_02",
+          "techno": "Sécurité",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "security",
+            "python",
+            "general",
+            "jwt",
+            "sql"
+          ]
+        },
+        {
+          "id": "security_03",
+          "techno": "Sécurité",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "general",
+            "python",
+            "sql",
+            "security",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "rag_01",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general",
+            "python",
+            "docker",
+            "architecture",
+            "sql"
+          ]
+        },
+        {
+          "id": "rag_02",
+          "techno": "RAG",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "python",
+            "general",
+            "sql",
+            "jwt",
+            "python"
+          ]
+        },
+        {
+          "id": "rag_03",
+          "techno": "RAG",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "general",
+            "sql",
+            "fastapi",
+            "docker"
+          ]
+        },
+        {
+          "id": "streamlit_01",
+          "techno": "Streamlit",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "python",
+            "react",
+            "general",
+            "jwt",
+            "python"
+          ]
+        },
+        {
+          "id": "streamlit_02",
+          "techno": "Streamlit",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "python",
+            "react",
+            "general",
+            "jwt",
+            "python"
+          ]
+        },
+        {
+          "id": "qdrant_01",
+          "techno": "Qdrant",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "python",
+            "general",
+            "sql",
+            "jwt",
+            "python"
+          ]
+        },
+        {
+          "id": "qdrant_02",
+          "techno": "Qdrant",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "python",
+            "general",
+            "sql",
+            "jwt",
+            "python"
+          ]
+        },
+        {
+          "id": "embeddings_01",
+          "techno": "Embeddings",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "general",
+            "python",
+            "sql",
+            "docker",
+            "jwt"
+          ]
+        },
+        {
+          "id": "embeddings_02",
+          "techno": "Embeddings",
+          "rang": 5,
+          "hit": true,
+          "themes": [
+            "sql",
+            "jwt",
+            "general",
+            "docker",
+            "python"
+          ]
+        },
+        {
+          "id": "pytest_01",
+          "techno": "Pytest",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "jwt",
+            "general",
+            "docker",
+            "python"
+          ]
+        },
+        {
+          "id": "pytest_02",
+          "techno": "Pytest",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "jwt",
+            "general",
+            "docker",
+            "python"
+          ]
+        },
+        {
+          "id": "ci_01",
+          "techno": "CI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "general",
+            "jwt",
+            "docker",
+            "python"
+          ]
+        },
+        {
+          "id": "ci_02",
+          "techno": "CI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "sql",
+            "python",
+            "python",
+            "python",
+            "python"
+          ]
+        },
+        {
+          "id": "architecture_01",
+          "techno": "Architecture",
+          "rang": 4,
+          "hit": true,
+          "themes": [
+            "python",
+            "sql",
+            "general",
+            "fastapi",
+            "react"
+          ]
+        },
+        {
+          "id": "architecture_02",
+          "techno": "Architecture",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "general",
+            "sql",
+            "docker",
+            "security",
+            "architecture"
+          ]
+        },
+        {
+          "id": "architecture_03",
+          "techno": "Architecture",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "python",
+            "sql",
+            "general",
+            "jwt",
+            "python"
+          ]
+        },
+        {
+          "id": "mentor_01",
+          "techno": "Mentorat",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "python",
+            "general",
+            "jwt",
+            "sql",
+            "react"
+          ]
+        },
+        {
+          "id": "mentor_02",
+          "techno": "Mentorat",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "python",
+            "general",
+            "jwt",
+            "sql",
+            "react"
+          ]
+        },
+        {
+          "id": "roadmap_01",
+          "techno": "Roadmap",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "general",
+            "python",
+            "python",
+            "python",
+            "python"
+          ]
+        },
+        {
+          "id": "roadmap_02",
+          "techno": "Roadmap",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "sql",
+            "general",
+            "security",
+            "architecture",
+            "fastapi"
+          ]
+        }
+      ]
+    },
+    "bm25_avec_rerank": {
+      "mode": "bm25",
+      "avec_rerank": true,
+      "precision_at_k": 0.9038,
+      "mrr": 0.7721,
+      "details": [
+        {
+          "id": "flask_01",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "flask",
+            "jwt",
+            "fastapi",
+            "flask",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "flask_02",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "flask",
+            "fastapi",
+            "flask",
+            "fastapi",
+            "flask"
+          ]
+        },
+        {
+          "id": "flask_03",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "flask",
+            "jwt",
+            "fastapi",
+            "flask",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "fastapi_01",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "fastapi",
+            "docker",
+            "sql",
+            "fastapi",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "fastapi_02",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "fastapi",
+            "python",
+            "docker",
+            "fastapi",
+            "python"
+          ]
+        },
+        {
+          "id": "fastapi_03",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "fastapi",
+            "docker",
+            "sql",
+            "fastapi",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "django_01",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "django",
+            "sql",
+            "fastapi",
+            "python",
+            "django"
+          ]
+        },
+        {
+          "id": "django_02",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "django",
+            "fastapi",
+            "sql",
+            "python",
+            "django"
+          ]
+        },
+        {
+          "id": "django_03",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "django",
+            "fastapi",
+            "sql",
+            "python",
+            "django"
+          ]
+        },
+        {
+          "id": "jwt_01",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "jwt",
+            "security",
+            "jwt",
+            "security",
+            "jwt"
+          ]
+        },
+        {
+          "id": "jwt_02",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "jwt",
+            "security",
+            "jwt",
+            "security",
+            "jwt"
+          ]
+        },
+        {
+          "id": "jwt_03",
+          "techno": "JWT",
+          "rang": 5,
+          "hit": true,
+          "themes": [
+            "jwt",
+            "security",
+            "jwt",
+            "security",
+            "jwt"
+          ]
+        },
+        {
+          "id": "react_01",
+          "techno": "React",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "react",
+            "react",
+            "react",
+            "react",
+            "react"
+          ]
+        },
+        {
+          "id": "react_02",
+          "techno": "React",
+          "rang": 4,
+          "hit": true,
+          "themes": [
+            "sql",
+            "general",
+            "python",
+            "react",
+            "docker"
+          ]
+        },
+        {
+          "id": "react_03",
+          "techno": "React",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "react",
+            "react",
+            "react",
+            "react",
+            "react"
+          ]
+        },
+        {
+          "id": "docker_01",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "docker",
+            "python",
+            "docker",
+            "docker",
+            "docker"
+          ]
+        },
+        {
+          "id": "docker_02",
+          "techno": "Docker",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "docker",
+            "docker",
+            "docker",
+            "docker",
+            "docker"
+          ]
+        },
+        {
+          "id": "docker_03",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "docker",
+            "docker",
+            "docker",
+            "docker",
+            "docker"
+          ]
+        },
+        {
+          "id": "python_files_01",
+          "techno": "Python",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "sql",
+            "python",
+            "sql",
+            "python"
+          ]
+        },
+        {
+          "id": "python_files_02",
+          "techno": "Python",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "python",
+            "sql",
+            "python",
+            "python",
+            "python"
+          ]
+        },
+        {
+          "id": "python_files_03",
+          "techno": "Python",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "sql",
+            "general",
+            "python",
+            "docker",
+            "jwt"
+          ]
+        },
+        {
+          "id": "sql_01",
+          "techno": "SQL",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "sql",
+            "python",
+            "docker",
+            "general",
+            "security"
+          ]
+        },
+        {
+          "id": "sql_02",
+          "techno": "SQL",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "python",
+            "sql",
+            "general",
+            "docker",
+            "python"
+          ]
+        },
+        {
+          "id": "sql_03",
+          "techno": "SQL",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "python",
+            "flask",
+            "sql",
+            "react",
+            "general"
+          ]
+        },
+        {
+          "id": "git_01",
+          "techno": "Git",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "general",
+            "python",
+            "sql",
+            "general",
+            "python"
+          ]
+        },
+        {
+          "id": "git_02",
+          "techno": "Git",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "sql",
+            "jwt",
+            "general",
+            "docker"
+          ]
+        },
+        {
+          "id": "git_03",
+          "techno": "Git",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "general",
+            "sql",
+            "python",
+            "general",
+            "python"
+          ]
+        },
+        {
+          "id": "solid_01",
+          "techno": "SOLID",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "general",
+            "sql",
+            "architecture",
+            "react",
+            "python"
+          ]
+        },
+        {
+          "id": "solid_02",
+          "techno": "SOLID",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general",
+            "python",
+            "sql",
+            "docker",
+            "react"
+          ]
+        },
+        {
+          "id": "security_01",
+          "techno": "Sécurité",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "python",
+            "jwt",
+            "general",
+            "docker",
+            "sql"
+          ]
+        },
+        {
+          "id": "security_02",
+          "techno": "Sécurité",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "security",
+            "python",
+            "general",
+            "jwt",
+            "sql"
+          ]
+        },
+        {
+          "id": "security_03",
+          "techno": "Sécurité",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "general",
+            "security",
+            "sql",
+            "fastapi",
+            "python"
+          ]
+        },
+        {
+          "id": "rag_01",
+          "techno": "RAG",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "sql",
+            "architecture",
+            "general",
+            "docker"
+          ]
+        },
+        {
+          "id": "rag_02",
+          "techno": "RAG",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "sql",
+            "python",
+            "general",
+            "jwt",
+            "sql"
+          ]
+        },
+        {
+          "id": "rag_03",
+          "techno": "RAG",
+          "rang": 5,
+          "hit": true,
+          "themes": [
+            "general",
+            "sql",
+            "docker",
+            "python",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "streamlit_01",
+          "techno": "Streamlit",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "react",
+            "jwt",
+            "general",
+            "python"
+          ]
+        },
+        {
+          "id": "streamlit_02",
+          "techno": "Streamlit",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "react",
+            "jwt",
+            "general",
+            "python"
+          ]
+        },
+        {
+          "id": "qdrant_01",
+          "techno": "Qdrant",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "sql",
+            "general",
+            "jwt",
+            "python"
+          ]
+        },
+        {
+          "id": "qdrant_02",
+          "techno": "Qdrant",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "sql",
+            "python",
+            "general",
+            "jwt",
+            "sql"
+          ]
+        },
+        {
+          "id": "embeddings_01",
+          "techno": "Embeddings",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "sql",
+            "jwt",
+            "general",
+            "docker"
+          ]
+        },
+        {
+          "id": "embeddings_02",
+          "techno": "Embeddings",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "sql",
+            "python",
+            "general",
+            "docker",
+            "jwt"
+          ]
+        },
+        {
+          "id": "pytest_01",
+          "techno": "Pytest",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "general",
+            "python",
+            "docker",
+            "jwt",
+            "general"
+          ]
+        },
+        {
+          "id": "pytest_02",
+          "techno": "Pytest",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "general",
+            "jwt",
+            "docker",
+            "python"
+          ]
+        },
+        {
+          "id": "ci_01",
+          "techno": "CI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "general",
+            "jwt",
+            "docker",
+            "python"
+          ]
+        },
+        {
+          "id": "ci_02",
+          "techno": "CI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "sql",
+            "python",
+            "python",
+            "python"
+          ]
+        },
+        {
+          "id": "architecture_01",
+          "techno": "Architecture",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "architecture",
+            "sql",
+            "react",
+            "python",
+            "general"
+          ]
+        },
+        {
+          "id": "architecture_02",
+          "techno": "Architecture",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "general",
+            "sql",
+            "architecture",
+            "security",
+            "docker"
+          ]
+        },
+        {
+          "id": "architecture_03",
+          "techno": "Architecture",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "python",
+            "general",
+            "sql",
+            "jwt",
+            "python"
+          ]
+        },
+        {
+          "id": "mentor_01",
+          "techno": "Mentorat",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "python",
+            "general",
+            "jwt",
+            "sql",
+            "react"
+          ]
+        },
+        {
+          "id": "mentor_02",
+          "techno": "Mentorat",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "python",
+            "general",
+            "jwt",
+            "sql",
+            "react"
+          ]
+        },
+        {
+          "id": "roadmap_01",
+          "techno": "Roadmap",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "general",
+            "python",
+            "python",
+            "python"
+          ]
+        },
+        {
+          "id": "roadmap_02",
+          "techno": "Roadmap",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "flask",
+            "sql",
+            "general",
+            "security",
+            "docker"
+          ]
+        }
+      ]
+    },
+    "hybride_sans_rerank": {
+      "mode": "hybride",
+      "avec_rerank": false,
+      "precision_at_k": 0.8846,
+      "mrr": 0.624,
+      "details": [
+        {
+          "id": "flask_01",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "flask",
+            "fastapi",
+            "jwt",
+            "flask",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "flask_02",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "flask",
+            "fastapi",
+            "flask",
+            "fastapi",
+            "flask"
+          ]
+        },
+        {
+          "id": "flask_03",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "flask",
+            "fastapi",
+            "jwt",
+            "flask",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "fastapi_01",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "fastapi",
+            "sql",
+            "docker",
+            "fastapi",
+            "docker"
+          ]
+        },
+        {
+          "id": "fastapi_02",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "fastapi",
+            "python",
+            "docker",
+            "fastapi",
+            "python"
+          ]
+        },
+        {
+          "id": "fastapi_03",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "fastapi",
+            "sql",
+            "docker",
+            "fastapi",
+            "docker"
+          ]
+        },
+        {
+          "id": "django_01",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "django",
+            "react",
+            "sql",
+            "docker",
+            "python"
+          ]
+        },
+        {
+          "id": "django_02",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "django",
+            "python",
+            "sql",
+            "fastapi",
+            "django"
+          ]
+        },
+        {
+          "id": "django_03",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "django",
+            "python",
+            "sql",
+            "fastapi",
+            "django"
+          ]
+        },
+        {
+          "id": "jwt_01",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "jwt",
+            "security",
+            "jwt",
+            "security",
+            "jwt"
+          ]
+        },
+        {
+          "id": "jwt_02",
+          "techno": "JWT",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "jwt",
+            "security",
+            "jwt",
+            "security",
+            "jwt"
+          ]
+        },
+        {
+          "id": "jwt_03",
+          "techno": "JWT",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "jwt",
+            "security",
+            "jwt",
+            "security",
+            "jwt"
+          ]
+        },
+        {
+          "id": "react_01",
+          "techno": "React",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "react",
+            "react",
+            "react",
+            "react",
+            "react"
+          ]
+        },
+        {
+          "id": "react_02",
+          "techno": "React",
+          "rang": 4,
+          "hit": true,
+          "themes": [
+            "general",
+            "sql",
+            "python",
+            "react",
+            "jwt"
+          ]
+        },
+        {
+          "id": "react_03",
+          "techno": "React",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "react",
+            "react",
+            "react",
+            "react",
+            "react"
+          ]
+        },
+        {
+          "id": "docker_01",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "docker",
+            "python",
+            "docker",
+            "docker",
+            "docker"
+          ]
+        },
+        {
+          "id": "docker_02",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "docker",
+            "docker",
+            "docker",
+            "docker",
+            "docker"
+          ]
+        },
+        {
+          "id": "docker_03",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "docker",
+            "docker",
+            "docker",
+            "docker",
+            "docker"
+          ]
+        },
+        {
+          "id": "python_files_01",
+          "techno": "Python",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "sql",
+            "python",
+            "sql",
+            "python",
+            "python"
+          ]
+        },
+        {
+          "id": "python_files_02",
+          "techno": "Python",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "sql",
+            "python",
+            "python",
+            "python",
+            "python"
+          ]
+        },
+        {
+          "id": "python_files_03",
+          "techno": "Python",
+          "rang": 4,
+          "hit": true,
+          "themes": [
+            "general",
+            "sql",
+            "docker",
+            "python",
+            "react"
+          ]
+        },
+        {
+          "id": "sql_01",
+          "techno": "SQL",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "security",
+            "sql",
+            "python",
+            "docker",
+            "general"
+          ]
+        },
+        {
+          "id": "sql_02",
+          "techno": "SQL",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "sql",
+            "python",
+            "docker",
+            "general",
+            "sql"
+          ]
+        },
+        {
+          "id": "sql_03",
+          "techno": "SQL",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "sql",
+            "python",
+            "flask",
+            "react",
+            "general"
+          ]
+        },
+        {
+          "id": "git_01",
+          "techno": "Git",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "sql",
+            "general",
+            "python",
+            "sql",
+            "general"
+          ]
+        },
+        {
+          "id": "git_02",
+          "techno": "Git",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "python",
+            "general",
+            "docker",
+            "sql",
+            "jwt"
+          ]
+        },
+        {
+          "id": "git_03",
+          "techno": "Git",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "jwt",
+            "general",
+            "python",
+            "sql",
+            "general"
+          ]
+        },
+        {
+          "id": "solid_01",
+          "techno": "SOLID",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "python",
+            "general",
+            "react",
+            "sql",
+            "architecture"
+          ]
+        },
+        {
+          "id": "solid_02",
+          "techno": "SOLID",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "sql",
+            "python",
+            "architecture",
+            "docker",
+            "general"
+          ]
+        },
+        {
+          "id": "security_01",
+          "techno": "Sécurité",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "python",
+            "general",
+            "security",
+            "fastapi",
+            "sql"
+          ]
+        },
+        {
+          "id": "security_02",
+          "techno": "Sécurité",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "jwt",
+            "python",
+            "security",
+            "general",
+            "sql"
+          ]
+        },
+        {
+          "id": "security_03",
+          "techno": "Sécurité",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "sql",
+            "security",
+            "python",
+            "general",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "rag_01",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "react",
+            "sql",
+            "general",
+            "python",
+            "docker"
+          ]
+        },
+        {
+          "id": "rag_02",
+          "techno": "RAG",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "general",
+            "python",
+            "sql",
+            "jwt",
+            "general"
+          ]
+        },
+        {
+          "id": "rag_03",
+          "techno": "RAG",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "general",
+            "sql",
+            "fastapi",
+            "docker"
+          ]
+        },
+        {
+          "id": "streamlit_01",
+          "techno": "Streamlit",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "general",
+            "python",
+            "react",
+            "jwt",
+            "general"
+          ]
+        },
+        {
+          "id": "streamlit_02",
+          "techno": "Streamlit",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "general",
+            "python",
+            "react",
+            "jwt",
+            "general"
+          ]
+        },
+        {
+          "id": "qdrant_01",
+          "techno": "Qdrant",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "python",
+            "general",
+            "sql",
+            "jwt",
+            "python"
+          ]
+        },
+        {
+          "id": "qdrant_02",
+          "techno": "Qdrant",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "python",
+            "general",
+            "sql",
+            "jwt",
+            "python"
+          ]
+        },
+        {
+          "id": "embeddings_01",
+          "techno": "Embeddings",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "general",
+            "jwt",
+            "sql",
+            "docker",
+            "python"
+          ]
+        },
+        {
+          "id": "embeddings_02",
+          "techno": "Embeddings",
+          "rang": 5,
+          "hit": true,
+          "themes": [
+            "sql",
+            "jwt",
+            "general",
+            "docker",
+            "python"
+          ]
+        },
+        {
+          "id": "pytest_01",
+          "techno": "Pytest",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "general",
+            "python",
+            "jwt",
+            "docker",
+            "general"
+          ]
+        },
+        {
+          "id": "pytest_02",
+          "techno": "Pytest",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "general",
+            "python",
+            "jwt",
+            "docker",
+            "general"
+          ]
+        },
+        {
+          "id": "ci_01",
+          "techno": "CI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "general",
+            "jwt",
+            "docker",
+            "python"
+          ]
+        },
+        {
+          "id": "ci_02",
+          "techno": "CI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "sql",
+            "python",
+            "python",
+            "python",
+            "python"
+          ]
+        },
+        {
+          "id": "architecture_01",
+          "techno": "Architecture",
+          "rang": 4,
+          "hit": true,
+          "themes": [
+            "python",
+            "sql",
+            "general",
+            "fastapi",
+            "react"
+          ]
+        },
+        {
+          "id": "architecture_02",
+          "techno": "Architecture",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "general",
+            "sql",
+            "docker",
+            "security",
+            "architecture"
+          ]
+        },
+        {
+          "id": "architecture_03",
+          "techno": "Architecture",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general",
+            "react",
+            "python",
+            "sql",
+            "jwt"
+          ]
+        },
+        {
+          "id": "mentor_01",
+          "techno": "Mentorat",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "general",
+            "sql",
+            "react",
+            "python",
+            "jwt"
+          ]
+        },
+        {
+          "id": "mentor_02",
+          "techno": "Mentorat",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general",
+            "python",
+            "sql",
+            "docker",
+            "jwt"
+          ]
+        },
+        {
+          "id": "roadmap_01",
+          "techno": "Roadmap",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "general",
+            "python",
+            "python",
+            "python",
+            "python"
+          ]
+        },
+        {
+          "id": "roadmap_02",
+          "techno": "Roadmap",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "general",
+            "sql",
+            "python",
+            "security",
+            "architecture"
+          ]
+        }
+      ]
+    },
+    "hybride_avec_rerank": {
+      "mode": "hybride",
+      "avec_rerank": true,
+      "precision_at_k": 0.9038,
+      "mrr": 0.7689,
+      "details": [
+        {
+          "id": "flask_01",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "flask",
+            "jwt",
+            "fastapi",
+            "flask",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "flask_02",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "flask",
+            "fastapi",
+            "flask",
+            "fastapi",
+            "flask"
+          ]
+        },
+        {
+          "id": "flask_03",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "flask",
+            "jwt",
+            "fastapi",
+            "flask",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "fastapi_01",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "fastapi",
+            "docker",
+            "sql",
+            "fastapi",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "fastapi_02",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "fastapi",
+            "python",
+            "docker",
+            "fastapi",
+            "python"
+          ]
+        },
+        {
+          "id": "fastapi_03",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "fastapi",
+            "docker",
+            "sql",
+            "fastapi",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "django_01",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "django",
+            "sql",
+            "fastapi",
+            "python",
+            "django"
+          ]
+        },
+        {
+          "id": "django_02",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "django",
+            "fastapi",
+            "sql",
+            "python",
+            "django"
+          ]
+        },
+        {
+          "id": "django_03",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "django",
+            "fastapi",
+            "sql",
+            "python",
+            "django"
+          ]
+        },
+        {
+          "id": "jwt_01",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "jwt",
+            "security",
+            "jwt",
+            "security",
+            "jwt"
+          ]
+        },
+        {
+          "id": "jwt_02",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "jwt",
+            "security",
+            "jwt",
+            "security",
+            "jwt"
+          ]
+        },
+        {
+          "id": "jwt_03",
+          "techno": "JWT",
+          "rang": 5,
+          "hit": true,
+          "themes": [
+            "jwt",
+            "security",
+            "jwt",
+            "security",
+            "jwt"
+          ]
+        },
+        {
+          "id": "react_01",
+          "techno": "React",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "react",
+            "react",
+            "react",
+            "react",
+            "react"
+          ]
+        },
+        {
+          "id": "react_02",
+          "techno": "React",
+          "rang": 4,
+          "hit": true,
+          "themes": [
+            "sql",
+            "general",
+            "python",
+            "react",
+            "docker"
+          ]
+        },
+        {
+          "id": "react_03",
+          "techno": "React",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "react",
+            "react",
+            "react",
+            "react",
+            "react"
+          ]
+        },
+        {
+          "id": "docker_01",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "docker",
+            "python",
+            "docker",
+            "docker",
+            "docker"
+          ]
+        },
+        {
+          "id": "docker_02",
+          "techno": "Docker",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "docker",
+            "docker",
+            "docker",
+            "docker",
+            "docker"
+          ]
+        },
+        {
+          "id": "docker_03",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "docker",
+            "docker",
+            "docker",
+            "docker",
+            "docker"
+          ]
+        },
+        {
+          "id": "python_files_01",
+          "techno": "Python",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "sql",
+            "python",
+            "sql",
+            "python"
+          ]
+        },
+        {
+          "id": "python_files_02",
+          "techno": "Python",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "python",
+            "sql",
+            "python",
+            "python",
+            "python"
+          ]
+        },
+        {
+          "id": "python_files_03",
+          "techno": "Python",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "sql",
+            "general",
+            "python",
+            "docker",
+            "jwt"
+          ]
+        },
+        {
+          "id": "sql_01",
+          "techno": "SQL",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "sql",
+            "python",
+            "docker",
+            "security",
+            "general"
+          ]
+        },
+        {
+          "id": "sql_02",
+          "techno": "SQL",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "python",
+            "sql",
+            "general",
+            "docker",
+            "python"
+          ]
+        },
+        {
+          "id": "sql_03",
+          "techno": "SQL",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "python",
+            "flask",
+            "sql",
+            "react",
+            "general"
+          ]
+        },
+        {
+          "id": "git_01",
+          "techno": "Git",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "general",
+            "python",
+            "sql",
+            "general",
+            "python"
+          ]
+        },
+        {
+          "id": "git_02",
+          "techno": "Git",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "sql",
+            "jwt",
+            "general",
+            "docker"
+          ]
+        },
+        {
+          "id": "git_03",
+          "techno": "Git",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "general",
+            "sql",
+            "python",
+            "general",
+            "python"
+          ]
+        },
+        {
+          "id": "solid_01",
+          "techno": "SOLID",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "general",
+            "sql",
+            "architecture",
+            "react",
+            "python"
+          ]
+        },
+        {
+          "id": "solid_02",
+          "techno": "SOLID",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "general",
+            "python",
+            "sql",
+            "docker",
+            "react"
+          ]
+        },
+        {
+          "id": "security_01",
+          "techno": "Sécurité",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "general",
+            "python",
+            "jwt",
+            "docker",
+            "sql"
+          ]
+        },
+        {
+          "id": "security_02",
+          "techno": "Sécurité",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "security",
+            "python",
+            "general",
+            "jwt",
+            "sql"
+          ]
+        },
+        {
+          "id": "security_03",
+          "techno": "Sécurité",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "general",
+            "security",
+            "sql",
+            "fastapi",
+            "python"
+          ]
+        },
+        {
+          "id": "rag_01",
+          "techno": "RAG",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "sql",
+            "architecture",
+            "general",
+            "docker"
+          ]
+        },
+        {
+          "id": "rag_02",
+          "techno": "RAG",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "sql",
+            "python",
+            "general",
+            "jwt",
+            "sql"
+          ]
+        },
+        {
+          "id": "rag_03",
+          "techno": "RAG",
+          "rang": 5,
+          "hit": true,
+          "themes": [
+            "general",
+            "sql",
+            "docker",
+            "python",
+            "fastapi"
+          ]
+        },
+        {
+          "id": "streamlit_01",
+          "techno": "Streamlit",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "react",
+            "jwt",
+            "general",
+            "python"
+          ]
+        },
+        {
+          "id": "streamlit_02",
+          "techno": "Streamlit",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "react",
+            "jwt",
+            "general",
+            "python"
+          ]
+        },
+        {
+          "id": "qdrant_01",
+          "techno": "Qdrant",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "sql",
+            "general",
+            "jwt",
+            "python"
+          ]
+        },
+        {
+          "id": "qdrant_02",
+          "techno": "Qdrant",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "sql",
+            "python",
+            "general",
+            "jwt",
+            "sql"
+          ]
+        },
+        {
+          "id": "embeddings_01",
+          "techno": "Embeddings",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "sql",
+            "jwt",
+            "general",
+            "docker"
+          ]
+        },
+        {
+          "id": "embeddings_02",
+          "techno": "Embeddings",
+          "rang": 2,
+          "hit": true,
+          "themes": [
+            "sql",
+            "python",
+            "general",
+            "docker",
+            "jwt"
+          ]
+        },
+        {
+          "id": "pytest_01",
+          "techno": "Pytest",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "general",
+            "python",
+            "docker",
+            "jwt",
+            "general"
+          ]
+        },
+        {
+          "id": "pytest_02",
+          "techno": "Pytest",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "general",
+            "jwt",
+            "docker",
+            "python"
+          ]
+        },
+        {
+          "id": "ci_01",
+          "techno": "CI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "general",
+            "jwt",
+            "docker",
+            "python"
+          ]
+        },
+        {
+          "id": "ci_02",
+          "techno": "CI",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "sql",
+            "python",
+            "python",
+            "python"
+          ]
+        },
+        {
+          "id": "architecture_01",
+          "techno": "Architecture",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "architecture",
+            "sql",
+            "react",
+            "python",
+            "general"
+          ]
+        },
+        {
+          "id": "architecture_02",
+          "techno": "Architecture",
+          "rang": 3,
+          "hit": true,
+          "themes": [
+            "general",
+            "sql",
+            "architecture",
+            "security",
+            "docker"
+          ]
+        },
+        {
+          "id": "architecture_03",
+          "techno": "Architecture",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "python",
+            "general",
+            "sql",
+            "jwt",
+            "python"
+          ]
+        },
+        {
+          "id": "mentor_01",
+          "techno": "Mentorat",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "python",
+            "general",
+            "jwt",
+            "sql",
+            "react"
+          ]
+        },
+        {
+          "id": "mentor_02",
+          "techno": "Mentorat",
+          "rang": null,
+          "hit": false,
+          "themes": [
+            "python",
+            "general",
+            "jwt",
+            "sql",
+            "react"
+          ]
+        },
+        {
+          "id": "roadmap_01",
+          "techno": "Roadmap",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "python",
+            "general",
+            "python",
+            "python",
+            "python"
+          ]
+        },
+        {
+          "id": "roadmap_02",
+          "techno": "Roadmap",
+          "rang": 1,
+          "hit": true,
+          "themes": [
+            "flask",
+            "sql",
+            "general",
+            "security",
+            "docker"
+          ]
+        }
+      ]
+    }
+  }
+}

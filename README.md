@@ -13,6 +13,23 @@ collecte de documentation GitHub → nettoyage → découpage → embeddings →
 
 L'objectif est de fournir une alternative **gratuite et open-source** aux assistants documentaires commerciaux, en s'appuyant exclusivement sur des modèles et services accessibles (Sentence-Transformers, Qdrant, Groq).
 
+### Fonctionnalités récentes
+
+- Historique de chat **persistant** (SQLite)
+- **Streaming** des réponses
+- Feedback 👍/👎, export Markdown
+- Filtres avancés (langage, repo, stars, date) + abstention si confiance faible
+- Citations avec **score de confiance**
+- Upload fichier **+ corpus** combinés
+- Embeddings **multilingues** FR/EN
+- API FastAPI (`src/api/main_api.py`) + CLI (`src/cli.py`)
+- Auth Streamlit (`STREAMLIT_PASSWORD` / `STREAMLIT_USERS`) + clés API (`API_KEYS`)
+- Export Markdown / PDF + signalement d’erreur
+- Webhook d’ingestion (`POST /ingest/webhook`) + script cron
+- Favoris / collections de docs, vision images (Groq), panel admin corpus
+- Comptes invité / email / GitHub + quotas + page **Admin** (users, usage, corpus, audit)
+- Éval retrieval : Precision@k / MRR + ablations (`src/evaluation/3_evaluer_retrieval.py`)
+
 ## Objectifs
 
 - Réduire le temps de recherche documentaire de ~70 %
@@ -30,22 +47,22 @@ GitHub (API)
 Nettoyage  ──►  Découpage (chunks ~500 mots, overlap 100)
    │
    ▼
-Embeddings (Sentence-Transformers all-MiniLM-L6-v2, dim 384)
+Embeddings (Sentence-Transformers paraphrase-multilingual-MiniLM-L12-v2, dim 384)
    │
    ▼
-Qdrant (collection "github_docs", distance COSINE)
+Qdrant (collection "github_docs", distance COSINE, filtres payload)
    │
    ▼
-Recherche hybride :  Dense (Qdrant)  +  Sparse (BM25)  ──► Fusion RRF ──► Reranking (Cross-encoder)
+Recherche hybride :  Dense (Qdrant + seuil)  +  Sparse (BM25)  ──► Fusion RRF ──► Reranking ──► Fraîcheur
    │
    ▼
-Génération (Groq · llama-3.3-70b-versatile) ──► Réponse FR + citations
+Génération streaming (Groq · llama-3.3-70b-versatile) ──► Réponse FR + citations + confiance
    │
    ▼
-Évaluation RAGAS (Faithfulness, Answer Relevancy, Context Recall/Precision)
+Évaluation RAGAS + Precision@k / MRR (ablations)
    │
    ▼
-Interface Streamlit
+Interface Streamlit (+ API FastAPI / CLI) · historique SQLite
 ```
 
 ### Stack technique
@@ -54,12 +71,12 @@ Interface Streamlit
 |-------|-------------|
 | Collecte | `PyGithub`, GitHub API |
 | Prétraitement | nettoyeur regex (badges, HTML, liens) + découpeur en chunks |
-| Embeddings | `sentence-transformers/all-MiniLM-L6-v2` (384 dimensions) |
-| Base vectorielle | **Qdrant** (Docker) |
-| Recherche | Hybride — Dense + BM25, fusion **RRF**, reranking `cross-encoder/ms-marco-MiniLM-L-6-v2` |
-| Génération | **Groq** — `llama-3.3-70b-versatile` |
-| Évaluation | **RAGAS** |
-| Interface | **Streamlit** (thème sombre personnalisé) |
+| Embeddings | `paraphrase-multilingual-MiniLM-L12-v2` (384 dimensions) |
+| Base vectorielle | **Qdrant** (Docker) + index payload |
+| Recherche | Hybride — Dense + BM25, RRF, reranking, fraîcheur, filtres |
+| Génération | **Groq** — `llama-3.3-70b-versatile` (streaming) |
+| Évaluation | **RAGAS** + Precision@k / MRR |
+| Interface | **Streamlit** + API FastAPI + CLI |
 
 ---
 

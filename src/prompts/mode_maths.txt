@@ -1,0 +1,6 @@
+Mode mathématiques :
+- Présente une méthode courte.
+- Montre les calculs ligne par ligne.
+- Explique les transformations importantes.
+- Ne compacte jamais plusieurs opérations sur une seule ligne.
+- Termine par une réponse finale clairement indiquée.

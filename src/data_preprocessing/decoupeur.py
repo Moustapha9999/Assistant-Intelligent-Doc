@@ -11,11 +11,14 @@ import yaml
 from pathlib import Path
 from tqdm import tqdm
 
-# ── Paramètres de chunking ────────────────────────────────────────
-TAILLE_CHUNK_TEXTE  = 500   # mots pour texte/doc
+# ── Paramètres de chunking (adaptatif) ────────────────────────────
+TAILLE_CHUNK_TEXTE  = 450   # mots cible par section
 TAILLE_CHUNK_CODE   = 80    # lignes pour code
-OVERLAP_TEXTE       = 100   # mots overlap
-OVERLAP_CODE        = 15    # lignes overlap
+OVERLAP_TEXTE       = 80
+OVERLAP_CODE        = 15
+# Limites adaptatives : sections courtes = 1 chunk ; longues = fenêtres glissantes
+MIN_MOTS_CHUNK      = 40
+MAX_MOTS_CHUNK      = 600
 
 EXTENSIONS_CODE = {
     '.py', '.js', '.ts', '.java', '.go', '.rs',
@@ -50,29 +53,80 @@ def extraire_metadonnees(contenu: str) -> tuple:
 
 # ── Chunking Markdown / Texte ─────────────────────────────────────
 def chunker_markdown(texte: str, meta: dict) -> list:
-    """Découpe le texte en chunks par sections avec overlap"""
+    """
+    Découpe adaptatif :
+    1) split par titres Markdown (# ## ### ####)
+    2) si section courte → 1 chunk
+    3) si longue → fenêtres avec overlap
+    4) préserve les blocs de code ```...``` autant que possible
+    """
     chunks = []
-    sections = re.split(r'\n#{1,4}\s+', texte)
-    titres   = re.findall(r'\n(#{1,4}\s+[^\n]+)', '\n' + texte)
+    # Isoler blocs code pour éviter de les couper au milieu
+    parties = re.split(r'(```[\s\S]*?```)', texte)
+    sections_brutes = []
+    for partie in parties:
+        if partie.startswith('```'):
+            sections_brutes.append(('codeblock', partie))
+        else:
+            sous = re.split(r'\n(?=#{1,4}\s+)', partie)
+            for s in sous:
+                if s.strip():
+                    sections_brutes.append(('md', s))
 
     section_titre = meta.get('chemin_fichier', 'Introduction')
+    buffer_titre = section_titre
 
-    for i, section in enumerate(sections):
-        if not section.strip():
+    for kind, section in sections_brutes:
+        titre_match = re.match(r'^(#{1,4})\s+([^\n]+)', section.strip())
+        if titre_match and kind == 'md':
+            buffer_titre = titre_match.group(2).strip()[:200]
+            corps = section[titre_match.end():].strip()
+        else:
+            corps = section.strip()
+
+        if not corps:
             continue
 
-        titre = titres[i - 1].strip('#').strip() if i > 0 and i - 1 < len(titres) else section_titre
-        mots  = section.split()
-
-        for j in range(0, len(mots), TAILLE_CHUNK_TEXTE - OVERLAP_TEXTE):
-            bloc = mots[j:j + TAILLE_CHUNK_TEXTE]
-            if len(bloc) < 20:
-                continue
-
+        if kind == 'codeblock':
             chunks.append({
-                'texte'        : ' '.join(bloc),
-                'section_titre': titre[:200],
-                'type_chunk'   : 'markdown',
+                'texte': corps[:4000],
+                'section_titre': f"{buffer_titre} (code)",
+                'type_chunk': 'codeblock',
+                **meta,
+            })
+            continue
+
+        mots = corps.split()
+        if len(mots) < MIN_MOTS_CHUNK:
+            if len(mots) >= 15:
+                chunks.append({
+                    'texte': ' '.join(mots),
+                    'section_titre': buffer_titre,
+                    'type_chunk': 'markdown',
+                    **meta,
+                })
+            continue
+
+        if len(mots) <= TAILLE_CHUNK_TEXTE:
+            chunks.append({
+                'texte': ' '.join(mots),
+                'section_titre': buffer_titre,
+                'type_chunk': 'markdown',
+                **meta,
+            })
+            continue
+
+        pas = max(50, TAILLE_CHUNK_TEXTE - OVERLAP_TEXTE)
+        for j in range(0, len(mots), pas):
+            bloc = mots[j:j + TAILLE_CHUNK_TEXTE]
+            if len(bloc) < MIN_MOTS_CHUNK and j > 0:
+                break
+            if len(bloc) > MAX_MOTS_CHUNK:
+                bloc = bloc[:MAX_MOTS_CHUNK]
+            chunks.append({
+                'texte': ' '.join(bloc),
+                'section_titre': buffer_titre,
+                'type_chunk': 'markdown',
                 **meta,
             })
 
@@ -123,6 +177,7 @@ def chunker_code(code: str, meta: dict) -> list:
             'texte'        : '\n'.join(bloc),
             'section_titre': titre,
             'type_chunk'   : 'code',
+            'ligne_debut'  : debut + 1,  # 1-indexé pour citations [fichier:ligne]
             **meta,
         })
 
@@ -137,6 +192,7 @@ def chunker_code(code: str, meta: dict) -> list:
                 'texte'        : '\n'.join(bloc),
                 'section_titre': titre,
                 'type_chunk'   : 'code',
+                'ligne_debut'  : j + 1,
                 **meta,
             })
 

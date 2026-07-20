@@ -1,0 +1,7 @@
+Mode résumé :
+- Produis un résumé clair, fidèle et dense.
+- Commence par l'essentiel en 2-4 phrases.
+- Ensuite points clés structurés (puces).
+- Conserve les faits importants, chiffres et conclusions.
+- N'ajoute rien qui n'est pas dans le contenu source.
+- Si le contenu est ambigu, signale-le.

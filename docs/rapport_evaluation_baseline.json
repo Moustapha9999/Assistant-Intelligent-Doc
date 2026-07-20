@@ -1,0 +1,1927 @@
+{
+  "date_utc": "2026-07-16T13:22:04.905651+00:00",
+  "top_k": 5,
+  "nombre_questions": 52,
+  "ablations": {
+    "dense_sans_rerank": {
+      "mode": "dense",
+      "avec_rerank": false,
+      "precision_at_k": 0.3846,
+      "mrr": 0.3147,
+      "details": [
+        {
+          "id": "flask_01",
+          "techno": "Flask",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "flask_02",
+          "techno": "Flask",
+          "rang": 5,
+          "hit": true
+        },
+        {
+          "id": "flask_03",
+          "techno": "Flask",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "fastapi_01",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "fastapi_02",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "fastapi_03",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "django_01",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "django_02",
+          "techno": "Django",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "django_03",
+          "techno": "Django",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "jwt_01",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "jwt_02",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "jwt_03",
+          "techno": "JWT",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "react_01",
+          "techno": "React",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "react_02",
+          "techno": "React",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "react_03",
+          "techno": "React",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "docker_01",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "docker_02",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "docker_03",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "python_files_01",
+          "techno": "Python",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "python_files_02",
+          "techno": "Python",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "python_files_03",
+          "techno": "Python",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "sql_01",
+          "techno": "SQL",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "sql_02",
+          "techno": "SQL",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "sql_03",
+          "techno": "SQL",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "git_01",
+          "techno": "Git",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "git_02",
+          "techno": "Git",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "git_03",
+          "techno": "Git",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "solid_01",
+          "techno": "SOLID",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "solid_02",
+          "techno": "SOLID",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "security_01",
+          "techno": "Sécurité",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "security_02",
+          "techno": "Sécurité",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "security_03",
+          "techno": "Sécurité",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "rag_01",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "rag_02",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "rag_03",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "streamlit_01",
+          "techno": "Streamlit",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "streamlit_02",
+          "techno": "Streamlit",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "qdrant_01",
+          "techno": "Qdrant",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "qdrant_02",
+          "techno": "Qdrant",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "embeddings_01",
+          "techno": "Embeddings",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "embeddings_02",
+          "techno": "Embeddings",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "pytest_01",
+          "techno": "Pytest",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "pytest_02",
+          "techno": "Pytest",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "ci_01",
+          "techno": "CI",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "ci_02",
+          "techno": "CI",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "architecture_01",
+          "techno": "Architecture",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "architecture_02",
+          "techno": "Architecture",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "architecture_03",
+          "techno": "Architecture",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "mentor_01",
+          "techno": "Mentorat",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "mentor_02",
+          "techno": "Mentorat",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "roadmap_01",
+          "techno": "Roadmap",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "roadmap_02",
+          "techno": "Roadmap",
+          "rang": null,
+          "hit": false
+        }
+      ]
+    },
+    "dense_avec_rerank": {
+      "mode": "dense",
+      "avec_rerank": true,
+      "precision_at_k": 0.3846,
+      "mrr": 0.375,
+      "details": [
+        {
+          "id": "flask_01",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "flask_02",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "flask_03",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "fastapi_01",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "fastapi_02",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "fastapi_03",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "django_01",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "django_02",
+          "techno": "Django",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "django_03",
+          "techno": "Django",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "jwt_01",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "jwt_02",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "jwt_03",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "react_01",
+          "techno": "React",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "react_02",
+          "techno": "React",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "react_03",
+          "techno": "React",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "docker_01",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "docker_02",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "docker_03",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "python_files_01",
+          "techno": "Python",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "python_files_02",
+          "techno": "Python",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "python_files_03",
+          "techno": "Python",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "sql_01",
+          "techno": "SQL",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "sql_02",
+          "techno": "SQL",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "sql_03",
+          "techno": "SQL",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "git_01",
+          "techno": "Git",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "git_02",
+          "techno": "Git",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "git_03",
+          "techno": "Git",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "solid_01",
+          "techno": "SOLID",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "solid_02",
+          "techno": "SOLID",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "security_01",
+          "techno": "Sécurité",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "security_02",
+          "techno": "Sécurité",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "security_03",
+          "techno": "Sécurité",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "rag_01",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "rag_02",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "rag_03",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "streamlit_01",
+          "techno": "Streamlit",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "streamlit_02",
+          "techno": "Streamlit",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "qdrant_01",
+          "techno": "Qdrant",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "qdrant_02",
+          "techno": "Qdrant",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "embeddings_01",
+          "techno": "Embeddings",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "embeddings_02",
+          "techno": "Embeddings",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "pytest_01",
+          "techno": "Pytest",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "pytest_02",
+          "techno": "Pytest",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "ci_01",
+          "techno": "CI",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "ci_02",
+          "techno": "CI",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "architecture_01",
+          "techno": "Architecture",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "architecture_02",
+          "techno": "Architecture",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "architecture_03",
+          "techno": "Architecture",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "mentor_01",
+          "techno": "Mentorat",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "mentor_02",
+          "techno": "Mentorat",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "roadmap_01",
+          "techno": "Roadmap",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "roadmap_02",
+          "techno": "Roadmap",
+          "rang": null,
+          "hit": false
+        }
+      ]
+    },
+    "bm25_sans_rerank": {
+      "mode": "bm25",
+      "avec_rerank": false,
+      "precision_at_k": 0.7308,
+      "mrr": 0.5186,
+      "details": [
+        {
+          "id": "flask_01",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "flask_02",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "flask_03",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "fastapi_01",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "fastapi_02",
+          "techno": "FastAPI",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "fastapi_03",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "django_01",
+          "techno": "Django",
+          "rang": 5,
+          "hit": true
+        },
+        {
+          "id": "django_02",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "django_03",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "jwt_01",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "jwt_02",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "jwt_03",
+          "techno": "JWT",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "react_01",
+          "techno": "React",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "react_02",
+          "techno": "React",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "react_03",
+          "techno": "React",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "docker_01",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "docker_02",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "docker_03",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "python_files_01",
+          "techno": "Python",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "python_files_02",
+          "techno": "Python",
+          "rang": 5,
+          "hit": true
+        },
+        {
+          "id": "python_files_03",
+          "techno": "Python",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "sql_01",
+          "techno": "SQL",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "sql_02",
+          "techno": "SQL",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "sql_03",
+          "techno": "SQL",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "git_01",
+          "techno": "Git",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "git_02",
+          "techno": "Git",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "git_03",
+          "techno": "Git",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "solid_01",
+          "techno": "SOLID",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "solid_02",
+          "techno": "SOLID",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "security_01",
+          "techno": "Sécurité",
+          "rang": 5,
+          "hit": true
+        },
+        {
+          "id": "security_02",
+          "techno": "Sécurité",
+          "rang": 4,
+          "hit": true
+        },
+        {
+          "id": "security_03",
+          "techno": "Sécurité",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "rag_01",
+          "techno": "RAG",
+          "rang": 4,
+          "hit": true
+        },
+        {
+          "id": "rag_02",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "rag_03",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "streamlit_01",
+          "techno": "Streamlit",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "streamlit_02",
+          "techno": "Streamlit",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "qdrant_01",
+          "techno": "Qdrant",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "qdrant_02",
+          "techno": "Qdrant",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "embeddings_01",
+          "techno": "Embeddings",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "embeddings_02",
+          "techno": "Embeddings",
+          "rang": 5,
+          "hit": true
+        },
+        {
+          "id": "pytest_01",
+          "techno": "Pytest",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "pytest_02",
+          "techno": "Pytest",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "ci_01",
+          "techno": "CI",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "ci_02",
+          "techno": "CI",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "architecture_01",
+          "techno": "Architecture",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "architecture_02",
+          "techno": "Architecture",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "architecture_03",
+          "techno": "Architecture",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "mentor_01",
+          "techno": "Mentorat",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "mentor_02",
+          "techno": "Mentorat",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "roadmap_01",
+          "techno": "Roadmap",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "roadmap_02",
+          "techno": "Roadmap",
+          "rang": 1,
+          "hit": true
+        }
+      ]
+    },
+    "bm25_avec_rerank": {
+      "mode": "bm25",
+      "avec_rerank": true,
+      "precision_at_k": 0.75,
+      "mrr": 0.6106,
+      "details": [
+        {
+          "id": "flask_01",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "flask_02",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "flask_03",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "fastapi_01",
+          "techno": "FastAPI",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "fastapi_02",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "fastapi_03",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "django_01",
+          "techno": "Django",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "django_02",
+          "techno": "Django",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "django_03",
+          "techno": "Django",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "jwt_01",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "jwt_02",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "jwt_03",
+          "techno": "JWT",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "react_01",
+          "techno": "React",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "react_02",
+          "techno": "React",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "react_03",
+          "techno": "React",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "docker_01",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "docker_02",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "docker_03",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "python_files_01",
+          "techno": "Python",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "python_files_02",
+          "techno": "Python",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "python_files_03",
+          "techno": "Python",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "sql_01",
+          "techno": "SQL",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "sql_02",
+          "techno": "SQL",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "sql_03",
+          "techno": "SQL",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "git_01",
+          "techno": "Git",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "git_02",
+          "techno": "Git",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "git_03",
+          "techno": "Git",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "solid_01",
+          "techno": "SOLID",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "solid_02",
+          "techno": "SOLID",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "security_01",
+          "techno": "Sécurité",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "security_02",
+          "techno": "Sécurité",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "security_03",
+          "techno": "Sécurité",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "rag_01",
+          "techno": "RAG",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "rag_02",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "rag_03",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "streamlit_01",
+          "techno": "Streamlit",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "streamlit_02",
+          "techno": "Streamlit",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "qdrant_01",
+          "techno": "Qdrant",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "qdrant_02",
+          "techno": "Qdrant",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "embeddings_01",
+          "techno": "Embeddings",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "embeddings_02",
+          "techno": "Embeddings",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "pytest_01",
+          "techno": "Pytest",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "pytest_02",
+          "techno": "Pytest",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "ci_01",
+          "techno": "CI",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "ci_02",
+          "techno": "CI",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "architecture_01",
+          "techno": "Architecture",
+          "rang": 4,
+          "hit": true
+        },
+        {
+          "id": "architecture_02",
+          "techno": "Architecture",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "architecture_03",
+          "techno": "Architecture",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "mentor_01",
+          "techno": "Mentorat",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "mentor_02",
+          "techno": "Mentorat",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "roadmap_01",
+          "techno": "Roadmap",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "roadmap_02",
+          "techno": "Roadmap",
+          "rang": 1,
+          "hit": true
+        }
+      ]
+    },
+    "hybride_sans_rerank": {
+      "mode": "hybride",
+      "avec_rerank": false,
+      "precision_at_k": 0.7308,
+      "mrr": 0.5103,
+      "details": [
+        {
+          "id": "flask_01",
+          "techno": "Flask",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "flask_02",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "flask_03",
+          "techno": "Flask",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "fastapi_01",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "fastapi_02",
+          "techno": "FastAPI",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "fastapi_03",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "django_01",
+          "techno": "Django",
+          "rang": 5,
+          "hit": true
+        },
+        {
+          "id": "django_02",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "django_03",
+          "techno": "Django",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "jwt_01",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "jwt_02",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "jwt_03",
+          "techno": "JWT",
+          "rang": 5,
+          "hit": true
+        },
+        {
+          "id": "react_01",
+          "techno": "React",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "react_02",
+          "techno": "React",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "react_03",
+          "techno": "React",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "docker_01",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "docker_02",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "docker_03",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "python_files_01",
+          "techno": "Python",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "python_files_02",
+          "techno": "Python",
+          "rang": 5,
+          "hit": true
+        },
+        {
+          "id": "python_files_03",
+          "techno": "Python",
+          "rang": 5,
+          "hit": true
+        },
+        {
+          "id": "sql_01",
+          "techno": "SQL",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "sql_02",
+          "techno": "SQL",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "sql_03",
+          "techno": "SQL",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "git_01",
+          "techno": "Git",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "git_02",
+          "techno": "Git",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "git_03",
+          "techno": "Git",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "solid_01",
+          "techno": "SOLID",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "solid_02",
+          "techno": "SOLID",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "security_01",
+          "techno": "Sécurité",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "security_02",
+          "techno": "Sécurité",
+          "rang": 4,
+          "hit": true
+        },
+        {
+          "id": "security_03",
+          "techno": "Sécurité",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "rag_01",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "rag_02",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "rag_03",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "streamlit_01",
+          "techno": "Streamlit",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "streamlit_02",
+          "techno": "Streamlit",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "qdrant_01",
+          "techno": "Qdrant",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "qdrant_02",
+          "techno": "Qdrant",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "embeddings_01",
+          "techno": "Embeddings",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "embeddings_02",
+          "techno": "Embeddings",
+          "rang": 5,
+          "hit": true
+        },
+        {
+          "id": "pytest_01",
+          "techno": "Pytest",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "pytest_02",
+          "techno": "Pytest",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "ci_01",
+          "techno": "CI",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "ci_02",
+          "techno": "CI",
+          "rang": 5,
+          "hit": true
+        },
+        {
+          "id": "architecture_01",
+          "techno": "Architecture",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "architecture_02",
+          "techno": "Architecture",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "architecture_03",
+          "techno": "Architecture",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "mentor_01",
+          "techno": "Mentorat",
+          "rang": 4,
+          "hit": true
+        },
+        {
+          "id": "mentor_02",
+          "techno": "Mentorat",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "roadmap_01",
+          "techno": "Roadmap",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "roadmap_02",
+          "techno": "Roadmap",
+          "rang": 1,
+          "hit": true
+        }
+      ]
+    },
+    "hybride_avec_rerank": {
+      "mode": "hybride",
+      "avec_rerank": true,
+      "precision_at_k": 0.7885,
+      "mrr": 0.6218,
+      "details": [
+        {
+          "id": "flask_01",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "flask_02",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "flask_03",
+          "techno": "Flask",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "fastapi_01",
+          "techno": "FastAPI",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "fastapi_02",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "fastapi_03",
+          "techno": "FastAPI",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "django_01",
+          "techno": "Django",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "django_02",
+          "techno": "Django",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "django_03",
+          "techno": "Django",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "jwt_01",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "jwt_02",
+          "techno": "JWT",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "jwt_03",
+          "techno": "JWT",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "react_01",
+          "techno": "React",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "react_02",
+          "techno": "React",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "react_03",
+          "techno": "React",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "docker_01",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "docker_02",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "docker_03",
+          "techno": "Docker",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "python_files_01",
+          "techno": "Python",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "python_files_02",
+          "techno": "Python",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "python_files_03",
+          "techno": "Python",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "sql_01",
+          "techno": "SQL",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "sql_02",
+          "techno": "SQL",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "sql_03",
+          "techno": "SQL",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "git_01",
+          "techno": "Git",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "git_02",
+          "techno": "Git",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "git_03",
+          "techno": "Git",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "solid_01",
+          "techno": "SOLID",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "solid_02",
+          "techno": "SOLID",
+          "rang": 4,
+          "hit": true
+        },
+        {
+          "id": "security_01",
+          "techno": "Sécurité",
+          "rang": 2,
+          "hit": true
+        },
+        {
+          "id": "security_02",
+          "techno": "Sécurité",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "security_03",
+          "techno": "Sécurité",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "rag_01",
+          "techno": "RAG",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "rag_02",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "rag_03",
+          "techno": "RAG",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "streamlit_01",
+          "techno": "Streamlit",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "streamlit_02",
+          "techno": "Streamlit",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "qdrant_01",
+          "techno": "Qdrant",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "qdrant_02",
+          "techno": "Qdrant",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "embeddings_01",
+          "techno": "Embeddings",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "embeddings_02",
+          "techno": "Embeddings",
+          "rang": 3,
+          "hit": true
+        },
+        {
+          "id": "pytest_01",
+          "techno": "Pytest",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "pytest_02",
+          "techno": "Pytest",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "ci_01",
+          "techno": "CI",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "ci_02",
+          "techno": "CI",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "architecture_01",
+          "techno": "Architecture",
+          "rang": 4,
+          "hit": true
+        },
+        {
+          "id": "architecture_02",
+          "techno": "Architecture",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "architecture_03",
+          "techno": "Architecture",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "mentor_01",
+          "techno": "Mentorat",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "mentor_02",
+          "techno": "Mentorat",
+          "rang": null,
+          "hit": false
+        },
+        {
+          "id": "roadmap_01",
+          "techno": "Roadmap",
+          "rang": 1,
+          "hit": true
+        },
+        {
+          "id": "roadmap_02",
+          "techno": "Roadmap",
+          "rang": 1,
+          "hit": true
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,4 @@
+Domaine FastAPI :
+- Réponds comme un expert FastAPI.
+- Utilise une structure réaliste : `main.py`, routers, schémas Pydantic, services si utile.
+- Privilégie les pratiques compatibles avec production et tests.

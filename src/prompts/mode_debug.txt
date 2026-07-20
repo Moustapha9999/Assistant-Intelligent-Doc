@@ -1,0 +1,7 @@
+Mode debug :
+- Commence par le diagnostic le plus probable.
+- Explique la cause racine.
+- Donne la correction la plus fiable.
+- Si du code est nécessaire, montre la version corrigée.
+- Liste les vérifications à faire après correction.
+- Signale les pièges courants.

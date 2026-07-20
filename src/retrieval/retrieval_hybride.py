@@ -1,352 +1,313 @@
 """
 Module de retrieval hybride : Dense (Qdrant) + Sparse (BM25) + Reranking (Cross-encoder)
+
+Améliorations :
+- lit configs/qdrant_config.yaml
+- SSL optionnel uniquement
+- filtres Qdrant natifs
+- score_threshold dense
+- ranking par fraîcheur
+- boosts lexicales modérés
+- score de confiance + abstention
 """
 
+from __future__ import annotations
+
 import os
-import ssl
-import numpy as np
+import sys
+from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from dotenv import load_dotenv
-
-# Qdrant
 from qdrant_client import QdrantClient
+from sentence_transformers import CrossEncoder, SentenceTransformer
+from retrieval.bm25 import construire_index_bm25, recherche_bm25
+from retrieval.contexte import compresser_documents
+from retrieval.dedup import booster_lexical, dedupliquer_documents, injecter_hits_termes
+from retrieval.dense import construire_filtre_qdrant, doc_from_payload, recherche_dense
+from retrieval.fusion import (
+    appliquer_fraicheur,
+    classer_par_theme,
+    fusionner_rrf,
+    normaliser_confiance,
+    parse_date,
+    reranker_documents,
+)
+from retrieval.query_rewriter import EXPANSIONS_REQUETE, fusionner_requetes, reecrire_requete
 
-# Embeddings
-from sentence_transformers import SentenceTransformer, CrossEncoder
-
-# BM25
-from rank_bm25 import BM25Okapi
-
-# YAML pour charger les chunks bruts (BM25)
-import yaml
+import config
 
 load_dotenv()
 
+BOOST_TERMES = {
+    "flask": ["flask", "@app.route", "jsonify"],
+    "django": ["django", "select_related", "prefetch_related"],
+    "react": ["react", "usestate", "useeffect", "hooks"],
+    "jwt": ["jwt", "pyjwt", "bearer"],
+    "fastapi": ["fastapi", "uvicorn", "pydantic"],
+    "docker": ["docker", "dockerfile", "compose"],
+    "fichier": ["open(", "with open", "pathlib"],
+}
+
+REPO_PREFERENCE = {
+    "flask": ["pallets/flask"],
+    "django": ["django/django"],
+    "react": ["facebook/react"],
+    "jwt": ["jpadilla/pyjwt"],
+    "fastapi": ["tiangolo/fastapi", "fastapi/fastapi"],
+    "docker": ["docker/docs", "compose-spec"],
+}
+
+BRUIT_REPOS = ("the-art-of-command-line", "nodebestpractices", "awesome-", "how-to-write")
+
+TERMES_FORCES = {
+    "flask": ["@app.route", "jsonify", "Flask("],
+    "django": ["select_related", "prefetch_related"],
+    "fastapi": ["FastAPI", "@app.get", "@app.post"],
+    "react": ["useState", "useEffect"],
+    "jwt": ["jwt.encode", "jwt.decode", "PyJWT"],
+    "docker": ["Dockerfile", "docker compose"],
+}
+
+
+def _normaliser_confiance(score_rerank: float, score_dense: float = 0.0) -> float:
+    """Wrapper compatibilité tests/imports existants."""
+    return normaliser_confiance(score_rerank, score_dense)
+
+
+def _parse_date(valeur: Any) -> Optional[datetime]:
+    return parse_date(valeur)
+
 
 class RetrievalHybride:
-    """
-    Moteur de recherche hybride combinant :
-    - Recherche dense  : similarité vectorielle via Qdrant
-    - Recherche sparse : BM25 sur les textes bruts
-    - Reranking        : Cross-encoder pour affiner le top-K
-    """
+    """Dense + BM25 + RRF + Cross-encoder + filtres + fraîcheur."""
 
     def __init__(self):
-        """Initialise les composants du retrieval hybride"""
+        self.cfg = config.charger_qdrant_config()
+        search_cfg = self.cfg.get("search", {})
+        self.score_threshold = float(search_cfg.get("score_threshold", 0.35))
+        self.abstention_threshold = float(search_cfg.get("abstention_threshold", 0.12))
+        self.freshness_weight = float(search_cfg.get("freshness_weight", 0.08))
+        self.default_limit = int(search_cfg.get("default_limit", 5))
 
-        # ── Config ──────────────────────────────────────────────────
-        self.qdrant_host       = os.getenv("QDRANT_HOST", "localhost")
-        self.qdrant_port       = int(os.getenv("QDRANT_PORT", 6333))
-        self.collection_name   = os.getenv("QDRANT_COLLECTION_NAME", "github_docs")
-        self.embedding_model   = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
-
-        # Chemins
-        self.base_dir          = Path(__file__).resolve().parent.parent
-        self.cache_folder      = str(self.base_dir / "models_cache")
-        self.chunks_file = str(
-        self.base_dir.parent / "data" / "processed" / "chunks" / "tous_chunks.json"
+        self.qdrant_host = os.getenv("QDRANT_HOST", "localhost")
+        self.qdrant_port = int(os.getenv("QDRANT_PORT", 6333))
+        self.collection_name = os.getenv(
+            "QDRANT_COLLECTION_NAME",
+            self.cfg.get("collection", {}).get("name", "github_docs"),
         )
+        self.embedding_model = config.MODELE_EMBEDDINGS
+        self.chunks_file = str(config.CHUNKS_FILE)
+        self.cache_folder = str(config.MODELS_CACHE_DIR)
 
-        # ── SSL fix (développement local) ───────────────────────────
-        ssl._create_default_https_context = ssl._create_unverified_context
+        config.configurer_ssl()
 
-        # ── Connexion Qdrant ─────────────────────────────────────────
         print("🔌 Connexion à Qdrant...")
         self.qdrant = QdrantClient(host=self.qdrant_host, port=self.qdrant_port)
         print(f"   ✅ Qdrant connecté ({self.qdrant_host}:{self.qdrant_port})")
 
-        # ── Modèle d'embeddings ──────────────────────────────────────
-        print(f"📦 Chargement du modèle d'embeddings ({self.embedding_model})...")
-        self.encodeur = SentenceTransformer(
-            self.embedding_model,
-            cache_folder=self.cache_folder
-        )
-        print("   ✅ Modèle d'embeddings chargé")
+        print(f"📦 Chargement embeddings ({self.embedding_model})...")
+        Path(self.cache_folder).mkdir(parents=True, exist_ok=True)
+        self.encodeur = SentenceTransformer(self.embedding_model, cache_folder=self.cache_folder)
+        print("   ✅ Embeddings chargés")
 
-        # ── Cross-encoder (reranking) ────────────────────────────────
-        print("📦 Chargement du cross-encoder...")
-        self.cross_encoder = CrossEncoder(
-            "cross-encoder/ms-marco-MiniLM-L-6-v2",
-            max_length=512,
-            device="cpu"
-        )
+        print("📦 Chargement cross-encoder...")
+        self.cross_encoder = CrossEncoder(config.MODELE_RERANKER, max_length=512, device="cpu")
         print("   ✅ Cross-encoder chargé")
 
-        # ── Index BM25 ───────────────────────────────────────────────
-        print("📑 Construction de l'index BM25...")
+        print("📑 Construction index BM25...")
         self.chunks_bruts, self.bm25_index = self._construire_index_bm25()
-        print(f"   ✅ Index BM25 construit ({len(self.chunks_bruts)} documents)")
-
-    # ────────────────────────────────────────────────────────────────
-    # CONSTRUCTION INDEX BM25
-    # ────────────────────────────────────────────────────────────────
+        print(f"   ✅ BM25 ({len(self.chunks_bruts)} docs)")
 
     def _construire_index_bm25(self):
-        """
-        Charge les chunks depuis le fichier YAML et construit l'index BM25.
-        Retourne (liste_chunks, index_bm25).
-        """
-        if not os.path.exists(self.chunks_file):
-            print(f"   ⚠️  Fichier chunks introuvable : {self.chunks_file}")
-            return [], None
+        return construire_index_bm25(self.chunks_file)
 
-        import json
-        with open(self.chunks_file, "r", encoding="utf-8") as f:
-            chunks = json.load(f)
+    def _construire_filtre_qdrant(self, filtres: Optional[Dict]):
+        return construire_filtre_qdrant(filtres)
 
-        # Tokenisation simple : minuscules + split
-        corpus_tokenise = [
-            chunk.get("texte", "").lower().split()
-            for chunk in chunks
-        ]
-        index = BM25Okapi(corpus_tokenise)
-        return chunks, index
+    def _doc_from_payload(self, payload: dict, score_dense: float = 0.0) -> Dict:
+        return doc_from_payload(payload, score_dense)
 
-    # ────────────────────────────────────────────────────────────────
-    # RECHERCHE DENSE (Qdrant)
-    # ────────────────────────────────────────────────────────────────
+    def _recherche_dense(self, requete: str, top_k: int = 20, filtres: Optional[Dict] = None) -> List[Dict]:
+        return recherche_dense(
+            qdrant=self.qdrant,
+            collection_name=self.collection_name,
+            encodeur=self.encodeur,
+            requete=requete,
+            top_k=top_k,
+            score_threshold=self.score_threshold,
+            filtres=filtres,
+        )
 
-    def _recherche_dense(self, requete: str, top_k: int = 20) -> List[Dict]:
-        """
-        Recherche par similarité vectorielle dans Qdrant.
-        Retourne une liste de documents avec scores normalisés [0-1].
-        """
-        vecteur = self.encodeur.encode(requete).tolist()
+    def _recherche_bm25(self, requete: str, top_k: int = 20, filtres: Optional[Dict] = None) -> List[Dict]:
+        return recherche_bm25(
+            bm25_index=self.bm25_index,
+            chunks_bruts=self.chunks_bruts,
+            requete=requete,
+            top_k=top_k,
+            passe_filtres=self._passe_filtres,
+            filtres=filtres,
+        )
 
-        try:
-            resultats = self.qdrant.search(
-                collection_name=self.collection_name,
-                query_vector=vecteur,
-                limit=top_k
-            )
-        except AttributeError:
-            response = self.qdrant.query_points(
-                collection_name=self.collection_name,
-                query=vecteur,
-                limit=top_k
-            )
-            resultats = response.points
-
-        documents = []
-        for hit in resultats:
-            payload = getattr(hit, "payload", {})
-            documents.append({
-                "texte"         : payload.get("texte", ""),
-                "nom_complet"   : payload.get("nom_complet", ""),
-                "langage"       : payload.get("langage", ""),
-                "url"           : payload.get("url", ""),
-                "section_titre" : payload.get("section_titre", ""),
-                "source_file"   : payload.get("source_file", ""),
-                "score_dense"   : float(getattr(hit, "score", 0)),
-                "score_bm25"    : 0.0,
-                "score_final"   : 0.0,
-            })
-        return documents
-
-    # ────────────────────────────────────────────────────────────────
-    # RECHERCHE SPARSE (BM25)
-    # ────────────────────────────────────────────────────────────────
-
-    def _recherche_bm25(self, requete: str, top_k: int = 20) -> List[Dict]:
-        """
-        Recherche BM25 sur les chunks bruts.
-        Retourne une liste de documents avec scores normalisés [0-1].
-        """
-        if self.bm25_index is None:
-            return []
-
-        tokens = requete.lower().split()
-        scores = self.bm25_index.get_scores(tokens)
-
-        # Normalisation des scores BM25 entre 0 et 1
-        score_max = scores.max() if scores.max() > 0 else 1.0
-        scores_normalises = scores / score_max
-
-        # Récupérer les top_k indices
-        indices_top = np.argsort(scores_normalises)[::-1][:top_k]
-
-        documents = []
-        for idx in indices_top:
-            if scores_normalises[idx] <= 0:
-                continue
-            chunk = self.chunks_bruts[idx]
-            meta  = chunk.get("metadonnees", {})
-            documents.append({
-                "texte"         : chunk.get("texte", ""),
-                "nom_complet"   : meta.get("nom_complet", ""),
-                "langage"       : meta.get("langage", ""),
-                "url"           : meta.get("url", ""),
-                "section_titre" : meta.get("section_titre", ""),
-                "source_file"   : meta.get("source_file", ""),
-                "score_dense"   : 0.0,
-                "score_bm25"    : float(scores_normalises[idx]),
-                "score_final"   : 0.0,
-            })
-        return documents
-
-    # ────────────────────────────────────────────────────────────────
-    # FUSION RRF (Reciprocal Rank Fusion)
-    # ────────────────────────────────────────────────────────────────
+    def _passe_filtres(self, doc: Dict, filtres: Optional[Dict]) -> bool:
+        if not filtres:
+            return True
+        if filtres.get("langage") and filtres["langage"] != "Tous":
+            if (doc.get("langage") or "").lower() != filtres["langage"].lower():
+                return False
+        if filtres.get("repo"):
+            if filtres["repo"].lower() not in (doc.get("nom_complet") or "").lower():
+                return False
+        if filtres.get("stars_min") is not None:
+            try:
+                if int(doc.get("etoiles") or 0) < int(filtres["stars_min"]):
+                    return False
+            except (TypeError, ValueError):
+                return False
+        if filtres.get("date_min"):
+            dt = _parse_date(doc.get("mis_a_jour_le"))
+            dt_min = _parse_date(filtres["date_min"])
+            if dt_min and (dt is None or dt < dt_min):
+                return False
+        return True
 
     def _fusionner_rrf(
         self,
-        docs_dense : List[Dict],
-        docs_bm25  : List[Dict],
-        k          : int = 60,
+        docs_dense: List[Dict],
+        docs_bm25: List[Dict],
+        k: int = 60,
         poids_dense: float = 0.6,
-        poids_bm25 : float = 0.4,
+        poids_bm25: float = 0.4,
     ) -> List[Dict]:
-        """
-        Fusionne les résultats dense et BM25 via Reciprocal Rank Fusion.
-        score_rrf = Σ poids_i / (k + rang_i)
-        """
-        scores_rrf: Dict[str, float] = {}
-        docs_map  : Dict[str, Dict]  = {}
-
-        # Clé unique = texte tronqué à 200 chars (évite les doublons)
-        def cle(doc: Dict) -> str:
-            return doc["texte"][:200]
-
-        # Contribution dense
-        for rang, doc in enumerate(docs_dense, start=1):
-            c = cle(doc)
-            scores_rrf[c] = scores_rrf.get(c, 0) + poids_dense / (k + rang)
-            if c not in docs_map:
-                docs_map[c] = doc
-            else:
-                docs_map[c]["score_dense"] = doc["score_dense"]
-
-        # Contribution BM25
-        for rang, doc in enumerate(docs_bm25, start=1):
-            c = cle(doc)
-            scores_rrf[c] = scores_rrf.get(c, 0) + poids_bm25 / (k + rang)
-            if c not in docs_map:
-                docs_map[c] = doc
-            else:
-                docs_map[c]["score_bm25"] = doc["score_bm25"]
-
-        # Tri par score RRF décroissant
-        for c, score in scores_rrf.items():
-            docs_map[c]["score_final"] = score
-
-        fusionnes = sorted(docs_map.values(), key=lambda d: d["score_final"], reverse=True)
-        return fusionnes
-
-    # ────────────────────────────────────────────────────────────────
-    # RERANKING (Cross-encoder)
-    # ────────────────────────────────────────────────────────────────
+        return fusionner_rrf(docs_dense, docs_bm25, k=k, poids_dense=poids_dense, poids_bm25=poids_bm25)
 
     def _reranker(self, requete: str, documents: List[Dict], top_k: int = 5) -> List[Dict]:
-        """
-        Affine le classement avec un cross-encoder question/document.
-        Retourne les top_k documents reclassés.
-        """
+        return reranker_documents(self.cross_encoder, requete, documents, top_k=top_k)
+
+    def _enrichir_requete(self, requete: str) -> str:
+        info = reecrire_requete(requete, EXPANSIONS_REQUETE)
+        return fusionner_requetes(info.reecrite, info.variantes)
+
+    def _reecrire_requete(self, requete: str):
+        return reecrire_requete(requete, EXPANSIONS_REQUETE)
+
+    def _booster_lexical(self, requete: str, documents: List[Dict]) -> List[Dict]:
+        return booster_lexical(
+            requete=requete,
+            documents=documents,
+            boost_termes=BOOST_TERMES,
+            repo_preference=REPO_PREFERENCE,
+            bruit_repos=BRUIT_REPOS,
+        )
+
+    def _appliquer_fraicheur(self, documents: List[Dict]) -> List[Dict]:
+        return appliquer_fraicheur(documents, self.freshness_weight)
+
+    def _injecter_hits_termes(self, requete: str, documents: List[Dict], max_inject: int = 8) -> List[Dict]:
+        return injecter_hits_termes(
+            requete=requete,
+            documents=documents,
+            chunks_bruts=self.chunks_bruts,
+            termes_forces=TERMES_FORCES,
+            max_inject=max_inject,
+        )
+
+    def doit_sabstenir(self, documents: List[Dict]) -> bool:
+        """True si la confiance du meilleur doc est sous le seuil."""
         if not documents:
-            return []
-
-        paires = [(requete, doc["texte"][:512]) for doc in documents]
-        scores_rerank = self.cross_encoder.predict(paires)
-
-        for doc, score in zip(documents, scores_rerank):
-            doc["score_rerank"] = float(score)
-
-        reclasses = sorted(documents, key=lambda d: d.get("score_rerank", 0), reverse=True)
-        return reclasses[:top_k]
-
-    # ────────────────────────────────────────────────────────────────
-    # POINT D'ENTRÉE PRINCIPAL
-    # ────────────────────────────────────────────────────────────────
+            return True
+        best = max(float(d.get("score_confiance") or 0) for d in documents)
+        return best < self.abstention_threshold
 
     def rechercher(
         self,
-        requete         : str,
-        top_k_retrieval : int = 20,
-        top_k_final     : int = 5,
-        filtres         : Optional[Dict] = None,
+        requete: str,
+        top_k_retrieval: int = 20,
+        top_k_final: int = 5,
+        filtres: Optional[Dict] = None,
+        avec_rerank: bool = True,
+        mode: str = "hybride",  # dense | bm25 | hybride
     ) -> List[Dict]:
-        """
-        Pipeline complet de recherche hybride.
+        print(f"\n🔍 Recherche ({mode}) : « {requete} »")
+        info_requete = self._reecrire_requete(requete)
+        requete_recherche = fusionner_requetes(info_requete.reecrite, info_requete.variantes)
+        if info_requete.reecrite != requete:
+            print(f"   ↔ Rewrite ({info_requete.intention}) : « {info_requete.reecrite[:120]} »")
+        top_k_final = top_k_final or self.default_limit
 
-        Args:
-            requete          : Question de l'utilisateur (en français ou anglais)
-            top_k_retrieval  : Nombre de documents récupérés par chaque moteur
-            top_k_final      : Nombre de documents renvoyés après reranking
-            filtres          : Filtres optionnels ex: {"langage": "Python"}
+        docs_dense, docs_bm25 = [], []
+        if mode in ("dense", "hybride"):
+            print("   → Dense (Qdrant)...")
+            docs_dense = self._recherche_dense(requete_recherche, top_k=top_k_retrieval, filtres=filtres)
+            print(f"      {len(docs_dense)} résultats")
+        if mode in ("bm25", "hybride"):
+            print("   → BM25...")
+            docs_bm25 = self._recherche_bm25(requete_recherche, top_k=top_k_retrieval, filtres=filtres)
+            print(f"      {len(docs_bm25)} résultats")
 
-        Returns:
-            Liste de documents classés par pertinence avec métadonnées et scores
-        """
-        print(f"\n🔍 Recherche hybride : « {requete} »")
+        if mode == "dense":
+            docs_fusionnes = docs_dense
+        elif mode == "bm25":
+            docs_fusionnes = docs_bm25
+        else:
+            docs_fusionnes = self._fusionner_rrf(docs_dense, docs_bm25)
 
-        # 1. Recherche dense
-        print("   → Recherche dense (Qdrant)...")
-        docs_dense = self._recherche_dense(requete, top_k=top_k_retrieval)
-        print(f"      {len(docs_dense)} résultats")
+        # Filtres complémentaires (date / repo partiel) côté Python
+        if filtres:
+            docs_fusionnes = [d for d in docs_fusionnes if self._passe_filtres(d, filtres)]
 
-        # 2. Recherche sparse BM25
-        print("   → Recherche sparse (BM25)...")
-        docs_bm25 = self._recherche_bm25(requete, top_k=top_k_retrieval)
-        print(f"      {len(docs_bm25)} résultats")
+        docs_fusionnes = dedupliquer_documents(docs_fusionnes)
+        docs_fusionnes = self._injecter_hits_termes(requete, docs_fusionnes)
 
-        # 3. Fusion RRF
-        print("   → Fusion RRF...")
-        docs_fusionnes = self._fusionner_rrf(docs_dense, docs_bm25)
-        print(f"      {len(docs_fusionnes)} documents uniques après fusion")
+        if avec_rerank:
+            print("   → Reranking...")
+            candidats = self._reranker(requete_recherche, docs_fusionnes, top_k=max(top_k_final * 4, 20))
+            candidats = self._booster_lexical(requete, candidats)
+            candidats = self._appliquer_fraicheur(candidats)
+        else:
+            candidats = docs_fusionnes
+            for d in candidats:
+                d["score_confiance"] = _normaliser_confiance(
+                    d.get("score_final", 0) * 10, d.get("score_dense", 0)
+                )
 
-        # 4. Filtre optionnel sur langage
-        if filtres and "langage" in filtres:
-            lang = filtres["langage"].lower()
-            docs_fusionnes = [
-                d for d in docs_fusionnes
-                if d.get("langage", "").lower() == lang
-            ]
-            print(f"   → Filtre langage='{lang}' : {len(docs_fusionnes)} documents")
-
-        # 5. Reranking cross-encoder
-        print("   → Reranking (cross-encoder)...")
-        docs_finaux = self._reranker(requete, docs_fusionnes, top_k=top_k_final)
-        print(f"      ✅ {len(docs_finaux)} documents finaux")
-
+        print("   → Classement thématique...")
+        candidats = classer_par_theme(
+            candidats,
+            themes_requete=info_requete.themes,
+            top_k=max(top_k_final * 2, top_k_final),
+            diversifier=True,
+        )
+        docs_finaux = compresser_documents(
+            candidats,
+            max_docs=top_k_final,
+            max_chars=900,
+            requete=requete,
+            resumer=True,
+            diversifier_themes=True,
+        )
+        for d in docs_finaux:
+            d["score_confiance"] = round(float(d.get("score_confiance") or 0), 3)
+            d["requete_reecrite"] = info_requete.reecrite
+            d["intention_requete"] = info_requete.intention
+        print(f"      ✅ {len(docs_finaux)} documents finaux (thèmes={[d.get('theme') for d in docs_finaux]})")
         return docs_finaux
 
-    # ────────────────────────────────────────────────────────────────
-    # UTILITAIRE : AFFICHAGE DES RÉSULTATS
-    # ────────────────────────────────────────────────────────────────
-
     def afficher_resultats(self, resultats: List[Dict]) -> None:
-        """Affiche les résultats de façon lisible dans le terminal"""
         if not resultats:
-            print("   ⚠️  Aucun résultat trouvé.")
+            print("   ⚠️  Aucun résultat.")
             return
-
-        print(f"\n📋 {len(resultats)} résultat(s) :\n")
         for i, doc in enumerate(resultats, 1):
-            print(f"  {'─' * 60}")
             print(f"  [{i}] {doc.get('section_titre', 'Sans titre')}")
-            print(f"       Repo    : {doc.get('nom_complet', 'N/A')}")
-            print(f"       Langage : {doc.get('langage', 'N/A')}")
-            print(f"       URL     : {doc.get('url', 'N/A')}")
-            print(f"       Scores  → dense={doc.get('score_dense', 0):.3f} "
-                  f"| bm25={doc.get('score_bm25', 0):.3f} "
-                  f"| rerank={doc.get('score_rerank', 0):.3f}")
-            print(f"       Extrait : {doc.get('texte', '')[:200]}...")
-        print(f"  {'─' * 60}\n")
+            print(f"       Repo={doc.get('nom_complet')} conf={doc.get('score_confiance', 0):.2f}")
 
-
-# ────────────────────────────────────────────────────────────────────
-# TEST RAPIDE
-# ────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     moteur = RetrievalHybride()
-
-    requetes_test = [
-        "Comment créer une API REST avec Python ?",
-        "How to implement authentication with JWT?",
-        "gestion des erreurs en JavaScript",
-    ]
-
-    for requete in requetes_test:
-        resultats = moteur.rechercher(requete, top_k_retrieval=20, top_k_final=5)
-        moteur.afficher_resultats(resultats)
+    for q in ["Comment créer une API REST avec FastAPI ?", "JWT authentication Python"]:
+        res = moteur.rechercher(q)
+        moteur.afficher_resultats(res)
+        print("Abstention?", moteur.doit_sabstenir(res))

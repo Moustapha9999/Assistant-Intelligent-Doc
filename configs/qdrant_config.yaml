@@ -1,9 +1,9 @@
-# Configuration Qdrant
+# Configuration Qdrant — lue par src/config.py et le retrieval
 
 collection:
   name: github_docs
   vector_params:
-    size: 384  # Dimension all-MiniLM-L6-v2
+    size: 384  # paraphrase-multilingual-MiniLM-L12-v2
     distance: COSINE
 
 indexing:
@@ -12,4 +12,9 @@ indexing:
 
 search:
   default_limit: 5
-  score_threshold: 0.5
+  # Seuil similarité cosine dense (Qdrant) — documents sous ce score exclus
+  score_threshold: 0.35
+  # Score rerank normalisé [0-1] sous lequel on s'abstient
+  abstention_threshold: 0.12
+  # Poids du bonus de fraîcheur (0 = désactivé)
+  freshness_weight: 0.08

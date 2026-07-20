@@ -56,11 +56,13 @@ class GenerateurEmbeddings:
                             fichier_sortie=config.EMBEDDINGS_FILE):
         """Génère les embeddings pour tous les chunks"""
 
-        # Charger les chunks
+        # Charger les chunks (JSON — format produit par le découpeur)
         import json
-        fichier_chunks = str(fichier_chunks).replace('.yaml', '.json')
+        fichier_chunks = Path(fichier_chunks)
+        if fichier_chunks.suffix == ".yaml":
+            fichier_chunks = fichier_chunks.with_suffix(".json")
         print(f" B- Chargement des chunks depuis {fichier_chunks}...")
-        with open(fichier_chunks, 'r', encoding='utf-8') as f:
+        with open(fichier_chunks, "r", encoding="utf-8") as f:
             chunks = json.load(f)
 
         print(f" {len(chunks)} chunks à traiter")
