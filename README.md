@@ -86,28 +86,40 @@ Interface Streamlit (+ API FastAPI / CLI) · historique SQLite
 
 ```
 Assistant-Intelligent-Doc/
+├── .github/workflows/ci.yml     # CI GitHub Actions
+├── .streamlit/config.toml       # Thème Streamlit
+├── .env.example                 # Variables d'environnement (modèle)
+├── requirements.txt
+├── assets/                      # Logo AssistDoc
 ├── configs/
 │   ├── repos_github.yaml        # Critères de sélection + repos forcés
 │   └── qdrant_config.yaml       # Config collection Qdrant
 ├── docker/
 │   ├── Dockerfile
 │   └── docker-compose.yml       # Service Qdrant
-├── src/
-│   ├── config.py                # Configuration centrale
-│   ├── data_collection/         # Sélection + scrape GitHub
-│   ├── data_preprocessing/      # Nettoyage + chunks
-│   ├── indexing/                # Embeddings + Qdrant
-│   ├── retrieval/               # Dense, BM25, fusion, citations
-│   ├── generation/              # LLM Groq + génération d'images
-│   ├── core/                    # Orchestrateur, modes, mémoires
-│   ├── app/                     # Streamlit (chat, auth, admin)
-│   ├── api/                     # FastAPI
-│   └── evaluation/              # RAGAS + retrieval metrics
-├── scripts/                     # Indexation, sync, CI locale
+├── docs/                        # Architecture, API, guide, rapports
+├── knowledge/                   # Mentorat / best practices / réponses types
+├── notebooks/                   # Explorations & évaluations
+├── scripts/                     # Indexation, sync GitHub, CI locale
 ├── tests/                       # Tests unitaires (CI)
-├── knowledge/                   # Corpus mentorat / best practices
-└── .github/workflows/ci.yml     # CI GitHub Actions
+└── src/
+    ├── config.py                # Configuration centrale
+    ├── cli.py                   # Interface en ligne de commande
+    ├── api/                     # FastAPI (+ webhook ingest)
+    ├── app/                     # Streamlit (chat, auth, admin, exports)
+    ├── core/                    # Orchestrateur, modes, mémoires
+    ├── data_collection/         # Sélection + scrape GitHub
+    ├── data_preprocessing/      # Nettoyage + chunks
+    ├── indexing/                # Embeddings + Qdrant
+    ├── retrieval/               # Dense, BM25, fusion, citations
+    ├── generation/              # LLM Groq + génération d'images
+    ├── prompts/                 # Prompts système / modes / domaines
+    ├── web/                     # Recherche web
+    ├── securite/                # Clés API / contrôle d'accès
+    └── evaluation/              # RAGAS + métriques retrieval
 ```
+
+Données locales (non versionnées) : `data/`, `qdrant_storage/`, `logs/`, `resultats/`, `models_cache/`.
 
 ---
 
