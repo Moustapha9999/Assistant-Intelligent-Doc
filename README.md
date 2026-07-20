@@ -1,5 +1,7 @@
 # Assistant Intelligent Doc — RAG Documentation Assistant
 
+[![CI](https://github.com/Moustapha9999/Assistant-Intelligent-Doc/actions/workflows/ci.yml/badge.svg)](https://github.com/Moustapha9999/Assistant-Intelligent-Doc/actions/workflows/ci.yml)
+
 Système intelligent d'assistance à la recherche documentaire technique pour développeurs **francophones**.
 
 Interrogez en français la documentation open-source de centaines de projets GitHub de qualité, et obtenez des réponses claires **avec citations des sources**.
@@ -17,17 +19,15 @@ L'objectif est de fournir une alternative **gratuite et open-source** aux assist
 
 - Historique de chat **persistant** (SQLite)
 - **Streaming** des réponses
-- Feedback 👍/👎, export Markdown
+- Feedback 👍/👎, export Markdown / PDF
 - Filtres avancés (langage, repo, stars, date) + abstention si confiance faible
 - Citations avec **score de confiance**
 - Upload fichier **+ corpus** combinés
 - Embeddings **multilingues** FR/EN
 - API FastAPI (`src/api/main_api.py`) + CLI (`src/cli.py`)
-- Auth Streamlit (`STREAMLIT_PASSWORD` / `STREAMLIT_USERS`) + clés API (`API_KEYS`)
-- Export Markdown / PDF + signalement d’erreur
-- Webhook d’ingestion (`POST /ingest/webhook`) + script cron
-- Favoris / collections de docs, vision images (Groq), panel admin corpus
-- Comptes invité / email / GitHub + quotas + page **Admin** (users, usage, corpus, audit)
+- Auth : invité, email, **Google** / **GitHub** OAuth + quotas + page **Admin**
+- Vision (analyse d'images via Groq) + **génération d'images** (Pollinations / OpenAI)
+- Favoris / collections, panel admin corpus, webhook d'ingestion
 - Éval retrieval : Precision@k / MRR + ablations (`src/evaluation/3_evaluer_retrieval.py`)
 
 ## Objectifs
@@ -75,8 +75,10 @@ Interface Streamlit (+ API FastAPI / CLI) · historique SQLite
 | Base vectorielle | **Qdrant** (Docker) + index payload |
 | Recherche | Hybride — Dense + BM25, RRF, reranking, fraîcheur, filtres |
 | Génération | **Groq** — `llama-3.3-70b-versatile` (streaming) |
+| Vision / images | Groq Vision + Pollinations (ou OpenAI Images) |
 | Évaluation | **RAGAS** + Precision@k / MRR |
 | Interface | **Streamlit** + API FastAPI + CLI |
+| CI | GitHub Actions (`pytest` + lint critique) |
 
 ---
 
@@ -91,111 +93,39 @@ Assistant-Intelligent-Doc/
 │   ├── Dockerfile
 │   └── docker-compose.yml       # Service Qdrant
 ├── src/
-│   ├── config.py                # Configuration centrale (chemins, modèle, SSL)
-│   ├── data_collection/
-│   │   ├── selecter_repo.py     # Sélection des repos (forcés + auto par critères)
-│   │   └── scraper_github.py    # Collecte README + fichiers /docs
-│   ├── data_preprocessing/
-│   │   ├── nettoyeur.py         # Nettoyage des README
-│   │   └── decoupeur.py         # Découpage en chunks
-│   ├── indexing/
-│   │   ├── generateur_embeddings.py  # Génération des embeddings
-│   │   └── gestionnaire_qdrant.py    # Indexation / requêtes Qdrant
-│   ├── retrieval/
-│   │   └── retrieval_hybride.py # Dense + BM25 + RRF + reranking
-│   ├── generation/
-│   │   └── generateur_reponse.py# Réponses FR via Groq avec citations
-│   ├── evaluation/
-│   │   └── evaluateur_ragas.py  # Évaluation RAGAS
-│   └── app/
-│       └── main.py              # Interface Streamlit
-├── scripts/
-│   └── indexer_corpus.py        # Pipeline complet d'indexation
-├── notebooks/                   # exploration, tests embeddings, évaluation
-├── data/                        # raw / processed / embeddings (gitignoré)
-├── docs/                        # architecture, api, guide d'utilisation
-├── tests/
-└── requirements.txt
+│   ├── config.py                # Configuration centrale
+│   ├── data_collection/         # Sélection + scrape GitHub
+│   ├── data_preprocessing/      # Nettoyage + chunks
+│   ├── indexing/                # Embeddings + Qdrant
+│   ├── retrieval/               # Dense, BM25, fusion, citations
+│   ├── generation/              # LLM Groq + génération d'images
+│   ├── core/                    # Orchestrateur, modes, mémoires
+│   ├── app/                     # Streamlit (chat, auth, admin)
+│   ├── api/                     # FastAPI
+│   └── evaluation/              # RAGAS + retrieval metrics
+├── scripts/                     # Indexation, sync, CI locale
+├── tests/                       # Tests unitaires (CI)
+├── knowledge/                   # Corpus mentorat / best practices
+└── .github/workflows/ci.yml     # CI GitHub Actions
 ```
-
----
-
-## Le pipeline en détail
-
-### 1. Sélection des repositories — `selecter_repo.py`
-
-Sélectionne les projets GitHub à partir de [configs/repos_github.yaml](configs/repos_github.yaml) :
-
-- **repos forcés** (liste explicite) + **recherche automatique** par critères
-- Critères : ≥ 250 stars, ≤ 24 mois d'ancienneté, README obligatoire, exclusion des forks et archives
-- Langages ciblés : Python, JavaScript, Java, C, C++, Go, PHP/Laravel
-- Filtrage par topics préférés (api, web, framework, ml, cli, testing, security…)
-
-### 2. Collecte — `scraper_github.py`
-
-Récupère le README et les fichiers `.md` du dossier `/docs` de chaque repo via l'API GitHub.
-
-### 3. Nettoyage — `nettoyeur.py`
-
-Supprime les badges (shields.io, travis-ci…), le HTML résiduel et les éléments non pertinents.
-
-### 4. Découpage — `decoupeur.py`
-
-Découpe les documents en **chunks d'environ 500 mots** avec un **overlap de 100 mots** pour préserver le contexte.
-
-### 5. Embeddings — `generateur_embeddings.py`
-
-Encode chaque chunk avec `all-MiniLM-L6-v2` → vecteurs de **384 dimensions**, sauvegardés en `.npz`.
-
-### 6. Indexation — `gestionnaire_qdrant.py` + `scripts/indexer_corpus.py`
-
-Crée la collection `github_docs` (distance COSINE) et indexe tous les chunks dans Qdrant.
-
-### 7. Recherche hybride — `retrieval_hybride.py`
-
-- **Dense** : recherche vectorielle Qdrant
-- **Sparse** : BM25 (`rank-bm25`)
-- **Fusion** : Reciprocal Rank Fusion (RRF)
-- **Reranking** : cross-encoder `ms-marco-MiniLM-L-6-v2`
-- Paramètres par défaut : `top_k_retrieval=20`, `top_k_final=5`
-
-### 8. Génération — `generateur_reponse.py`
-
-Génère une réponse **en français** via Groq (`llama-3.3-70b-versatile`, `temperature=0.1`), strictement basée sur le contexte récupéré, avec **citation systématique des sources GitHub**.
-
-### 9. Évaluation — `evaluateur_ragas.py`
-
-Mesure la qualité du système avec RAGAS : **Faithfulness, Answer Relevancy, Context Recall, Context Precision**.
-
-### 10. Interface — `app/main.py`
-
-Application Streamlit (thème sombre, IBM Plex) pour poser des questions et visualiser réponses + sources.
 
 ---
 
 ## Installation
 
 ```bash
-# 1. Cloner le repo
 git clone https://github.com/Moustapha9999/Assistant-Intelligent-Doc.git
 cd Assistant-Intelligent-Doc
-
-# 2. Créer l'environnement virtuel
-python -m venv venv
+python -m venv .venv
 # Windows
-venv\Scripts\activate
-# Mac/Linux
-# source venv/bin/activate
-
-# 3. Installer les dépendances
+.venv\Scripts\activate
+# Linux / macOS
+source .venv/bin/activate
 pip install -r requirements.txt
-
-# 4. Configurer les variables d'environnement
-cp .env.example .env
-# puis éditer .env
+cp .env.example .env   # puis renseigner GROQ_API_KEY, etc.
 ```
 
-### Variables d'environnement (`.env`)
+Variables utiles dans `.env` :
 
 ```ini
 GITHUB_TOKEN=ghp_xxx              # pour la collecte
@@ -203,6 +133,7 @@ GROQ_API_KEY=gsk_xxx             # pour la génération
 LLM_MODEL=llama-3.3-70b-versatile
 LLM_TEMPERATURE=0.1
 QDRANT_URL=http://localhost:6333
+# IMAGE_GEN_PROVIDER=auto        # pollinations | openai | off
 # DISABLE_SSL_VERIFY=1           # dépannage réseau uniquement (proxy d'entreprise)
 ```
 
@@ -221,20 +152,15 @@ docker-compose up -d
 ### 2. Construire le corpus (une seule fois)
 
 ```bash
-# Sélection des repos
 python src/data_collection/selecter_repo.py
-# Collecte de la documentation
 python src/data_collection/scraper_github.py
-# Nettoyage
 python src/data_preprocessing/nettoyeur.py
-# Découpage en chunks
 python src/data_preprocessing/decoupeur.py
 ```
 
 ### 3. Indexer le corpus dans Qdrant
 
 ```bash
-# Génère les embeddings puis indexe tout dans Qdrant
 python scripts/indexer_corpus.py
 ```
 
@@ -244,11 +170,19 @@ python scripts/indexer_corpus.py
 streamlit run src/app/main.py
 ```
 
-### 5. Évaluer le système (optionnel)
+### 5. CI locale (même checks que GitHub)
+
+```bash
+# Windows
+pwsh scripts/run_ci.ps1
+# Linux / macOS
+bash scripts/run_ci.sh
+```
+
+### 6. Évaluer le système (optionnel)
 
 ```bash
 python src/evaluation/evaluateur_ragas.py
-# ou via le notebook : notebooks/evaluation.ipynb
 ```
 
 ---
