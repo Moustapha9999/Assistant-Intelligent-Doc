@@ -83,6 +83,48 @@ def peut_gerer_corpus() -> bool:
     return est_admin_session()
 
 
+def aller_accueil() -> None:
+    """Revient à la page Accueil (navigation Streamlit)."""
+    for cible in ("accueil.py", "Accueil"):
+        try:
+            st.switch_page(cible)
+            return
+        except Exception:
+            continue
+    st.rerun()
+
+
+def exiger_admin(*, autoriser_login: bool = True) -> bool:
+    """
+    Garde d'accès admin (page / actions).
+    Retourne True si tier=admin. Sinon affiche « Accès refusé » et stoppe.
+    """
+    exiger_auth()
+    if est_admin_session():
+        return True
+
+    st.error("⛔ Accès refusé — réservé aux administrateurs.")
+    if est_compte_connecte():
+        st.info(
+            f"Compte actuel : **{utilisateur_courant()}** "
+            f"(rôle : `{tier_courant()}`). "
+            "Déconnectez-vous puis reconnectez-vous avec un compte administrateur."
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("Retour à l'Accueil", key="admin_denied_home", use_container_width=True):
+                aller_accueil()
+        with c2:
+            if st.button("Se déconnecter", key="admin_denied_logout", use_container_width=True):
+                deconnecter()
+                aller_accueil()
+    elif autoriser_login:
+        st.caption("Connectez-vous avec l'adresse e-mail administrateur.")
+        formulaire_connexion(key_prefix="admin_gate")
+    st.stop()
+    return False
+
+
 def _appliquer_user(user: Dict[str, Any]) -> None:
     st.session_state.auth_ok = True
     st.session_state.auth_user_id = user["id"]

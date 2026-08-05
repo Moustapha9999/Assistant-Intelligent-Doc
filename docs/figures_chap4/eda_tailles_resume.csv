@@ -1,0 +1,15 @@
+metrique;valeur
+nb_chunks;144018
+nb_langages;26
+nb_repos_selectionnes;317
+nb_repos_dans_chunks;415
+nb_fichiers;16623
+chars_moyenne;987.5
+chars_mediane;526.0
+chars_p25;263.0
+chars_p75;1165.0
+tokens_approx_moyenne_chars_div4;246.9
+mots_moyenne;104.5
+mots_mediane;57.0
+fichier_chars_moyenne;8555.2
+fichier_chars_mediane;2759

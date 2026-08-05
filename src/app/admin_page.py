@@ -4,26 +4,72 @@ Dashboard Admin AssistDoc — modules séparés, feedbacks, corpus, paramètres 
 
 from __future__ import annotations
 
+import importlib
 import json
 import sys
 from pathlib import Path
 
 import streamlit as st
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[2]  # .../Assistant-Intelligent-Doc
 sys.path.insert(0, str(ROOT / "src"))
 
 from app import admin_corpus
 from app import runtime_config
-from app.auth_basique import (
-    deconnecter,
-    est_admin_session,
-    exiger_auth,
-    users_db,
-    utilisateur_session,
-)
+import app.auth_basique as _auth_basique
+
+# Streamlit garde souvent l'ancien module en cache après hot-reload
+importlib.reload(_auth_basique)
+
+deconnecter = _auth_basique.deconnecter
+est_admin_session = _auth_basique.est_admin_session
+est_compte_connecte = _auth_basique.est_compte_connecte
+exiger_auth = _auth_basique.exiger_auth
+formulaire_connexion = _auth_basique.formulaire_connexion
+tier_courant = _auth_basique.tier_courant
+users_db = _auth_basique.users_db
+utilisateur_courant = _auth_basique.utilisateur_courant
+utilisateur_session = _auth_basique.utilisateur_session
+
 from app.historique_sqlite import HistoriqueSQLite
 from app.quotas import QUOTAS
+
+
+def _aller_accueil() -> None:
+    for cible in ("accueil.py", "Accueil"):
+        try:
+            st.switch_page(cible)
+            return
+        except Exception:
+            continue
+    st.rerun()
+
+
+def _exiger_admin_page() -> None:
+    """Garde d'accès — refus si non-admin (ne repose pas seulement sur le menu)."""
+    exiger_auth()
+    if est_admin_session():
+        return
+    st.error("⛔ Accès refusé — réservé aux administrateurs.")
+    if est_compte_connecte():
+        st.info(
+            f"Compte actuel : **{utilisateur_courant()}** "
+            f"(rôle : `{tier_courant()}`). "
+            "Déconnectez-vous puis reconnectez-vous avec un compte administrateur."
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("Retour à l'Accueil", key="admin_denied_home", use_container_width=True):
+                _aller_accueil()
+        with c2:
+            if st.button("Se déconnecter", key="admin_denied_logout", use_container_width=True):
+                deconnecter()
+                _aller_accueil()
+    else:
+        st.caption("Connectez-vous avec l'adresse e-mail administrateur.")
+        formulaire_connexion(key_prefix="admin_gate")
+    st.stop()
+
 
 st.set_page_config(page_title="AssistDoc Admin", page_icon="🛡", layout="wide")
 
@@ -70,21 +116,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-exiger_auth()
-
-if not est_admin_session():
-    from app.auth_basique import formulaire_connexion
-
-    st.markdown(
-        """
-        <div style="text-align:center;margin:1rem 0 0.5rem 0;color:#a8b3c4;font-size:0.95rem">
-          Accès admin — connectez-vous avec le compte administrateur.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    formulaire_connexion(key_prefix="admin_gate")
-    st.stop()
+# Sécurité : ne pas se contenter du menu — refus si non-admin
+_exiger_admin_page()
 
 admin = utilisateur_session()
 db = users_db()
@@ -124,10 +157,7 @@ with st.sidebar:
     ):
         deconnecter()
         st.toast("Déconnecté — mode invité")
-        try:
-            st.switch_page("main.py")
-        except Exception:
-            st.rerun()
+        _aller_accueil()
 
 st.markdown(
     f"""
@@ -246,7 +276,7 @@ with modules[1]:
         feedbacks = histo.lister_feedback(150)
     except Exception as exc:
         st.error(f"Impossible de charger les feedbacks : {exc}")
-        st.caption("Arrêtez Streamlit (Ctrl+C) puis relancez `streamlit run src/app/main.py`.")
+        st.caption("Arrêtez Streamlit (Ctrl+C) puis relancez `streamlit run src/app/main.py` (navigation Accueil / Admin).")
         feedbacks = []
     if filtre == "Positifs":
         feedbacks = [f for f in feedbacks if f.get("label") == "positif"]

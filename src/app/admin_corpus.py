@@ -14,6 +14,27 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import config
 
 
+def _exiger_admin_streamlit() -> None:
+    """Refuse les mutations corpus hors session admin (défense en profondeur)."""
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+        if get_script_run_ctx() is None:
+            return  # hors UI Streamlit (scripts CLI) : pas de garde session
+        from app.auth_basique import est_admin_session
+
+        if not est_admin_session():
+            raise PermissionError(
+                "Accès refusé : rôle administrateur requis pour cette opération."
+            )
+    except PermissionError:
+        raise
+    except ImportError as exc:
+        raise PermissionError(
+            "Accès refusé : authentification administrateur indisponible."
+        ) from exc
+
+
 def _charger_chunks(chunks_path: str | Path) -> list[dict[str, Any]]:
     chemin = Path(chunks_path)
     if not chemin.exists():
@@ -98,6 +119,7 @@ def lister_repos_qdrant(limite: int = 200) -> List[Dict[str, Any]]:
 
 def supprimer_repo(nom_complet: str) -> Tuple[bool, str]:
     """Supprime tous les points Qdrant d'un dépôt (+ retire des chunks locaux si présents)."""
+    _exiger_admin_streamlit()
     if not nom_complet or "/" not in nom_complet:
         return False, "Nom de dépôt invalide (attendu owner/repo)."
     try:
@@ -146,6 +168,7 @@ def ajouter_document_texte(
     section_titre: str = "Document ajouté",
 ) -> Tuple[bool, str]:
     """Chunk + embed + upsert immédiat d'un document texte dans Qdrant."""
+    _exiger_admin_streamlit()
     texte = (texte or "").strip()
     if len(texte) < 40:
         return False, "Texte trop court (min. 40 caractères)."
@@ -225,6 +248,7 @@ def ajouter_document_texte(
 
 def reindexer_collection(recreer: bool = False) -> Tuple[bool, str]:
     """Relance l'indexation depuis le fichier d'embeddings existant."""
+    _exiger_admin_streamlit()
     emb = Path(config.EMBEDDINGS_FILE)
     if not emb.exists():
         return (

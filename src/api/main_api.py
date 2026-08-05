@@ -26,7 +26,7 @@ ROOT_PROJECT = ROOT_SRC.parent
 if str(ROOT_SRC) not in sys.path:
     sys.path.insert(0, str(ROOT_SRC))
 
-from api.auth import exiger_api_key, verifier_secret_webhook
+from api.auth import exiger_admin_api, exiger_api_key, verifier_secret_webhook
 from app.historique_sqlite import HistoriqueSQLite
 from core.orchestrateur import OrchestrateurAssistant
 
@@ -171,4 +171,21 @@ def ingest_webhook(
         "message": "Synchronisation planifiée en arrière-plan",
         "since": payload.since,
         "run": payload.run,
+    }
+
+
+@app.post("/admin/ingest")
+def admin_ingest(
+    payload: WebhookIngestRequest,
+    background_tasks: BackgroundTasks,
+    _admin: str = Depends(exiger_admin_api),
+) -> dict[str, Any]:
+    """Sync incrémentale réservée admin (header X-Admin-Key)."""
+    background_tasks.add_task(_lancer_sync, payload.since, payload.run)
+    return {
+        "status": "accepte",
+        "message": "Synchronisation admin planifiée",
+        "since": payload.since,
+        "run": payload.run,
+        "actor": _admin,
     }

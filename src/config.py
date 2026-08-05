@@ -75,7 +75,7 @@ def charger_qdrant_config() -> Dict[str, Any]:
         "indexing": {"batch_size": 100, "optimize_after": True},
         "search": {
             "default_limit": 5,
-            "score_threshold": 0.35,
+            "score_threshold": 0.25,
             "abstention_threshold": 0.15,
             "freshness_weight": 0.08,
         },

@@ -13,7 +13,9 @@ indexing:
 search:
   default_limit: 5
   # Seuil similarité cosine dense (Qdrant) — documents sous ce score exclus
-  score_threshold: 0.35
+  # Note: avec MiniLM multilingue non normalisé côté index, les top scores
+  # tournent souvent autour de 0.30–0.40 ; 0.35 excluait 100 % des hits.
+  score_threshold: 0.25
   # Score rerank normalisé [0-1] sous lequel on s'abstient
   abstention_threshold: 0.12
   # Poids du bonus de fraîcheur (0 = désactivé)

@@ -1,0 +1,27 @@
+rang;langage;nb_chunks;pourcentage
+1;Python;35797;24.86
+2;Go;24285;16.86
+3;TypeScript;18273;12.69
+4;JavaScript;12626;8.77
+5;Rust;10213;7.09
+6;C++;9772;6.79
+7;Jupyter Notebook;9279;6.44
+8;Java;6047;4.20
+9;C;5092;3.54
+10;Laravel;3058;2.12
+11;PHP;2689;1.87
+12;Dockerfile;1333;0.93
+13;Unknown;1050;0.73
+14;Ruby;752;0.52
+15;Lua;686;0.48
+16;Markdown;673;0.47
+17;HTML;527;0.37
+18;Dart;399;0.28
+19;C#;366;0.25
+20;Kotlin;265;0.18
+21;Shell;242;0.17
+22;TeX;223;0.15
+23;MLIR;134;0.09
+24;SQL;119;0.08
+25;Scala;85;0.06
+26;Blade;33;0.02
