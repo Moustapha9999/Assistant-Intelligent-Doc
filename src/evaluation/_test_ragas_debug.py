@@ -22,7 +22,7 @@ with open(fichier, encoding="utf-8") as f:
 
 llm = LangchainLLMWrapper(ChatGroq(
     api_key=os.getenv("GROQ_API_KEY"),
-    model=os.getenv("LLM_MODEL", "llama-3.3-70b-versatile"),
+    model=os.getenv("LLM_MODEL", "openai/gpt-oss-120b"),
     temperature=0.0,
     max_tokens=2048,
 ))

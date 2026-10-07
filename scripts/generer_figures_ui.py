@@ -148,7 +148,7 @@ def page_shell(body: str, title: str, sidebar_mode: str = "reponse") -> str:
   <div class="hist">Hooks React</div>
 """
     return f"""<!DOCTYPE html>
-<html lang="fr"><head><meta charset="utf-8"><title>{title}</title>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{title}</title>
 <style>{CSS}</style></head>
 <body>
 <aside class="sidebar">

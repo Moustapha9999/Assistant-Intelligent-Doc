@@ -47,6 +47,7 @@ python-dateutil>=2.8.0
 httpx>=0.27.0
 PyJWT[crypto]>=2.8.0
 python-multipart>=0.0.9
+matplotlib>=3.8.0
 
 # ── Développement ─────────────────────────────────────
 pytest>=7.4.0

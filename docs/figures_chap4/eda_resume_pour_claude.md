@@ -1,14 +1,13 @@
 # EDA corpus — export pour le mémoire (chap. 4)
 
-Généré le : 2026-07-26T14:22:55
+Généré le : 2026-09-01T12:21:03
 
 ## Synthèse
 
 | Indicateur | Valeur |
 |---|---:|
 | Repos sélectionnés | 317 (235 forcés + 82 auto) |
-| Chunks (fichier local) | 144,018 |
-| Points Qdrant (`github_docs`) | 144,701 |
+| Chunks | 144,018 |
 | Langages | 26 |
 | Fichiers sources | 16,623 |
 | Collecte GitHub (fichiers locaux) | 2026-03-28 → 2026-06-12 |
@@ -48,4 +47,4 @@ Généré le : 2026-07-26T14:22:55
 - `eda_chunks_par_langage.csv`
 - `eda_chunks_par_type.csv`
 - `eda_tailles_resume.csv`
-- `figure_4_2_accueil.png` / `figure_4_3_reponse_sources.png` (si générées)
+- `figure_4_5_distribution_langages.png` (si générée)

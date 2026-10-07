@@ -105,22 +105,22 @@ class RetrievalHybride:
 
         config.configurer_ssl()
 
-        print("🔌 Connexion à Qdrant...")
+        print("[*] Connexion a Qdrant...")
         self.qdrant = QdrantClient(host=self.qdrant_host, port=self.qdrant_port)
-        print(f"   ✅ Qdrant connecté ({self.qdrant_host}:{self.qdrant_port})")
+        print(f"   [OK] Qdrant connecte ({self.qdrant_host}:{self.qdrant_port})")
 
-        print(f"📦 Chargement embeddings ({self.embedding_model})...")
+        print(f"[*] Chargement embeddings ({self.embedding_model})...")
         Path(self.cache_folder).mkdir(parents=True, exist_ok=True)
         self.encodeur = SentenceTransformer(self.embedding_model, cache_folder=self.cache_folder)
-        print("   ✅ Embeddings chargés")
+        print("   [OK] Embeddings charges")
 
-        print("📦 Chargement cross-encoder...")
+        print("[*] Chargement cross-encoder...")
         self.cross_encoder = CrossEncoder(config.MODELE_RERANKER, max_length=512, device="cpu")
-        print("   ✅ Cross-encoder chargé")
+        print("   [OK] Cross-encoder charge")
 
-        print("📑 Construction index BM25...")
+        print("[*] Construction index BM25...")
         self.chunks_bruts, self.bm25_index = self._construire_index_bm25()
-        print(f"   ✅ BM25 ({len(self.chunks_bruts)} docs)")
+        print(f"   [OK] BM25 ({len(self.chunks_bruts)} docs)")
 
     def _construire_index_bm25(self):
         return construire_index_bm25(self.chunks_file)
@@ -231,7 +231,7 @@ class RetrievalHybride:
         avec_rerank: bool = True,
         mode: str = "hybride",  # dense | bm25 | hybride
     ) -> List[Dict]:
-        print(f"\n🔍 Recherche ({mode}) : « {requete} »")
+        print(f"\n[*] Recherche ({mode}) : « {requete} »")
         info_requete = self._reecrire_requete(requete)
         requete_recherche = fusionner_requetes(info_requete.reecrite, info_requete.variantes)
         if info_requete.reecrite != requete:
@@ -293,7 +293,7 @@ class RetrievalHybride:
             d["score_confiance"] = round(float(d.get("score_confiance") or 0), 3)
             d["requete_reecrite"] = info_requete.reecrite
             d["intention_requete"] = info_requete.intention
-        print(f"      ✅ {len(docs_finaux)} documents finaux (thèmes={[d.get('theme') for d in docs_finaux]})")
+        print(f"      [OK] {len(docs_finaux)} documents finaux (themes={[d.get('theme') for d in docs_finaux]})")
         return docs_finaux
 
     def afficher_resultats(self, resultats: List[Dict]) -> None:

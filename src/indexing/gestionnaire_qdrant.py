@@ -40,7 +40,7 @@ class GestionnaireQdrant:
         self.distance = Distance.COSINE if dist == "COSINE" else Distance.COSINE
         self.batch_size = int(self.cfg.get("indexing", {}).get("batch_size", 100))
 
-        print(f"🔌 Connexion à Qdrant ({self.host}:{self.port})...")
+        print(f"[*] Connexion a Qdrant ({self.host}:{self.port})...")
         try:
             self.client = QdrantClient(host=self.host, port=self.port)
             self.client.get_collections()
@@ -192,7 +192,7 @@ class GestionnaireQdrant:
         cache_folder = str(config.MODELS_CACHE_DIR)
         seuil = float(self.cfg.get("search", {}).get("score_threshold", 0.35))
 
-        print(f" 🔍 Recherche: '{requete}'")
+        print(f" [*] Recherche: '{requete}'")
         modele = SentenceTransformer(config.MODELE_EMBEDDINGS, cache_folder=cache_folder)
         query_vector = modele.encode(requete).tolist()
 

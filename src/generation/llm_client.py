@@ -5,12 +5,15 @@ from __future__ import annotations
 import os
 import re
 import time
+from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from dotenv import load_dotenv
 from groq import Groq
 
-load_dotenv()
+# Toujours relire le .env du projet (évite un vieux LLM_MODEL en mémoire / CWD)
+_ENV = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(_ENV, override=True)
 
 
 def _attendre_rate_limit(message: str, tentative: int) -> float:
@@ -65,7 +68,13 @@ class LLMClient:
         def _rt_get(key: str, fallback: str) -> str:
             return str(rt.get(key) if rt.get(key) is not None else os.getenv(key, fallback))
 
-        self.modele = modele or _rt_get("LLM_MODEL", "llama-3.3-70b-versatile")
+        self.modele = modele or _rt_get("LLM_MODEL", "openai/gpt-oss-120b")
+        # Auto-migration si un ancien modèle Groq retiré est encore configuré
+        _obsoletes = ("llama-3.3-70b-versatile", "llama-3.1-8b-instant")
+        if any(x in self.modele for x in _obsoletes):
+            self.modele = "openai/gpt-oss-120b"
+            print(f"   ⚠️  Modèle Groq obsolète détecté → bascule sur {self.modele}")
+        print(f"   ✅ LLM Groq : {self.modele}")
         self.temperature = float(
             temperature
             if temperature is not None
@@ -96,7 +105,7 @@ class LLMClient:
 
         self.modele_vision = _rt_get(
             "GROQ_VISION_MODEL",
-            "meta-llama/llama-4-scout-17b-16e-instruct",
+            "groq/compound",
         )
 
         if os.getenv("MODE_RAGAS_EVAL", "false").lower() == "true":

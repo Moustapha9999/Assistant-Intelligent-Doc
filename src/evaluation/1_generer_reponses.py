@@ -19,7 +19,7 @@ load_dotenv()
 os.environ["DESACTIVER_WEB_SEARCH"] = "true"
 os.environ["MODE_RAGAS_EVAL"] = "true"
 # Modèle plus léger = moins de tokens / meilleurs rate-limits sur compte gratuit Groq
-os.environ["LLM_MODEL"] = os.getenv("RAGAS_LLM_MODEL", "llama-3.1-8b-instant")
+os.environ["LLM_MODEL"] = os.getenv("RAGAS_LLM_MODEL", "openai/gpt-oss-20b")
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))

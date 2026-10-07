@@ -105,6 +105,32 @@ Les 26 langages complets : `eda_chunks_par_langage.csv`.
 
 Fichiers CSV : `eda_chunks_par_type.csv`, `eda_tailles_resume.csv`.
 
+### 4.4.2 Visualisations — texte mémoire (prêt à coller)
+
+> **Figure 5 :** Distribution des chunks par langage de programmation  
+> Fichier : `figure_4_5_distribution_langages.png`
+
+```
+4.4.2. Visualisations
+
+Deux figures accompagnent l'analyse exploratoire du corpus.
+
+La Figure 5 présente la distribution des chunks par langage de programmation
+sous forme de diagramme en barres horizontales. L'axe des ordonnées recense
+les dix langages les plus représentés ; l'axe des abscisses indique le nombre
+de chunks indexés. La figure confirme visuellement la prépondérance de Python
+(35 797 chunks, 24,9 %) et de Go (24 285 chunks, 16,9 %), ainsi qu'une
+diversité notable des langages compilés (Rust, C++, C, Java) et des notebooks
+Jupyter. Cette répartition a guidé le choix des questions du jeu de test RAGAS,
+afin de couvrir plusieurs écosystèmes plutôt qu'un corpus Python-only.
+
+L'analyse exploratoire confirme la cohérence du corpus. On peut dès lors
+aborder la modélisation du pipeline RAG proprement dit.
+```
+
+**Attention terminologie :** parler de **chunks** (unités indexées), pas de
+« projets GitHub » — un même dépôt peut produire plusieurs chunks.
+
 ---
 
 ## 4. Section 4.5 — Modélisation RAG
@@ -185,20 +211,25 @@ Feedback 👍/👎 interne SQLite ≠ enquête ISI structurée.
 
 | Fichier | Usage mémoire |
 |---|---|
-| `figure_4_2_accueil.png` | Fig. 4.2 — écran d’accueil AssistDoc |
-| `figure_4_3_reponse_sources.png` | Fig. 4.3 — réponse + sources & confiance |
-| `figure_4_2_accueil.html` / `figure_4_3_*.html` | Sources HTML des captures |
+| `figure_4_2_accueil.png` | Fig. 4.2 — écran d’accueil AssistDoc (**capture live**, sept. 2026) |
+| `figure_4_3_reponse_sources.png` | Fig. 4.3 / Fig. 8 — requête Flask + sources GitHub citées (**capture live**, sept. 2026) |
+| `figure_4_5_distribution_langages.png` | Fig. 4.5 — distribution chunks par langage (matplotlib) |
+| `figure_4_10_performance_objectifs.png` | Fig. 10 — performance RAGAS vs cibles (barres groupées) |
+| `figure_4_2_accueil.html` / `figure_4_3_*.html` | Maquettes HTML (secours si pas de capture live) |
 | `eda_resume_pour_claude.md` | Synthèse EDA courte |
-| `eda_*.csv` | Tableaux bruts |
+| `eda_*.csv` | Tableaux bruts (source des figures quantitatives) |
 
-**Note honesté :** captures = maquettes HTML fidèles au thème Streamlit AssistDoc (vrai logo + contenu issu du jeu d’évaluation).  
-Une tentative de capture live Streamlit a échoué (UI principale incomplète côté navigateur headless). Pour des captures 100 % live : ouvrir `streamlit run src/app/main.py` et screenshot manuellement.
+**Fig. 4.2 :** capture manuelle de l’écran d’accueil Streamlit.  
+**Fig. 4.3 (Fig. 8 mémoire) :** capture live — requête « Créer une API REST avec Flask », réponse structurée, sources GitHub (`flask-rest-fr` / `flask-rest-en`) avec scores de confiance.  
+**Fig. 4.5 :** générée depuis `eda_chunks_par_langage.csv` (top 10, Laravel seul au rang 10).
 
 ### Régénérer les exports
 
 ```bash
 python scripts/export_eda_memoire.py
-python scripts/generer_figures_ui.py
+python scripts/generer_figure_distribution_langages.py
+python scripts/generer_figure_performance_objectifs.py
+python scripts/generer_figures_ui.py   # maquettes 4.2 / 4.3 si besoin
 ```
 
 ---

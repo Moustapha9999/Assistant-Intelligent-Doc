@@ -14,6 +14,12 @@ import importlib
 import sys
 from pathlib import Path
 
+# Windows cp1252 ne gère pas les emojis des logs (🔌, ✅…)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 _APP_DIR = Path(__file__).resolve().parent
 _SRC = _APP_DIR.parent
 if str(_SRC) not in sys.path:

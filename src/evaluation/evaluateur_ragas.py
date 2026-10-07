@@ -43,7 +43,7 @@ class EvaluateurRAGAS:
 
     def __init__(self):
         self.groq_api_key = os.getenv("GROQ_API_KEY")
-        self.modele = os.getenv("RAGAS_LLM_MODEL", "llama-3.1-8b-instant")
+        self.modele = os.getenv("RAGAS_LLM_MODEL", "openai/gpt-oss-20b")
         self.base_dir = Path(__file__).resolve().parent.parent.parent
         self.dossier_resultats = self.base_dir / "resultats" / "metrics"
         self.dossier_resultats.mkdir(parents=True, exist_ok=True)

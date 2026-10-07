@@ -52,6 +52,9 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+# Logo tout en haut de la sidebar (au-dessus d'Accueil / Admin)
+if _LOGO_FILE.exists():
+    st.logo(str(_LOGO_FILE), size="small")
 
 # Session invité automatique (style ChatGPT) — pas d'écran bloquant
 exiger_auth()
@@ -91,10 +94,14 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
     color: var(--text);
     font-family: 'Inter', system-ui, sans-serif;
 }
-#MainMenu, footer, header { visibility: hidden; }
+#MainMenu, footer, header { display: none !important; }
 [data-testid="stToolbar"] { display: none; }
 .block-container { padding: 0 !important; max-width: 100% !important; }
 [data-testid="stAppViewContainer"] > .main { background: var(--bg) !important; }
+/* Évite le gros vide Streamlit au-dessus du contenu */
+section.main > div {
+    padding-top: 0 !important;
+}
 
 /* ── Sidebar Claude-like ── */
 [data-testid="stSidebar"] {
@@ -102,27 +109,44 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
     border-right: 1px solid rgba(255,255,255,0.06) !important;
     min-width: 260px !important;
 }
-[data-testid="stSidebar"] > div:first-child { padding: 4px 10px 12px !important; }
-/* Navigation Accueil/Admin + contenu collés en haut */
+[data-testid="stSidebar"] > div:first-child { padding: 0 10px 12px !important; }
+/* Logo st.logo() collé en haut + nom AssistDoc */
+[data-testid="stSidebarHeader"] {
+    padding: 10px 8px 6px !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+}
+[data-testid="stSidebarHeader"] [data-testid="stLogo"] {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+}
+[data-testid="stSidebarHeader"] [data-testid="stLogo"]::after {
+    content: "AssistDoc";
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.2px;
+    white-space: nowrap;
+}
+[data-testid="stSidebarHeader"] img {
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 9px !important;
+    object-fit: cover !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+}
 [data-testid="stSidebarNav"] {
-    padding: 2px 0 4px !important;
+    padding: 2px 0 6px !important;
     margin: 0 !important;
 }
 [data-testid="stSidebarNav"] ul { gap: 0 !important; }
 section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
     padding-top: 0 !important;
+    margin-top: 0 !important;
 }
-.sb-brand {
-    display: flex; align-items: center; gap: 10px;
-    padding: 2px 8px 8px;
-}
-.sb-brand-icon {
-    width: 32px; height: 32px; border-radius: 9px;
-    object-fit: cover;
-    display: block;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-}
-.sb-brand-name { font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -0.2px; }
 .sb-export-box {
     margin: 6px 0 4px 0;
     padding: 8px 10px 6px;
@@ -196,9 +220,9 @@ section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
 .topbar-r { font-size: 13px; color: var(--text-dim); font-weight: 500; }
 
 /* ── Chat ── */
-.chat-wrap { max-width: 720px; margin: 0 auto; padding: 8px 24px 240px; }
+.chat-wrap { max-width: 720px; margin: 0 auto; padding: 4px 24px 200px; }
 .welcome {
-    text-align: center; padding: 80px 20px 36px;
+    text-align: center; padding: 28px 20px 20px;
     max-width: 520px; margin: 0 auto;
 }
 .wicon {
@@ -241,6 +265,58 @@ section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
 .tdots span:nth-child(3) { animation-delay: 0.4s; }
 @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-5px)} }
 .tlabel { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+
+/* Pendant la réflexion : fond flou, composer estompé */
+.thinking-stage {
+    position: relative;
+    min-height: 120px;
+    margin: 8px 0 24px;
+    padding: 28px 20px 22px;
+    border-radius: 18px;
+    overflow: hidden;
+}
+.thinking-stage-bg {
+    position: absolute; inset: 0;
+    background:
+        radial-gradient(ellipse 60% 50% at 20% 40%, rgba(91,159,212,0.22), transparent 70%),
+        radial-gradient(ellipse 50% 45% at 80% 60%, rgba(120,100,180,0.16), transparent 70%),
+        radial-gradient(ellipse 40% 35% at 50% 80%, rgba(255,255,255,0.04), transparent 70%);
+    filter: blur(28px);
+    transform: scale(1.15);
+    pointer-events: none;
+}
+.thinking-stage-fg {
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column; align-items: flex-start;
+    gap: 6px;
+}
+.thinking-chips {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin-top: 14px; max-width: 520px;
+}
+.thinking-chip {
+    height: 34px; border-radius: 10px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.07);
+    filter: blur(1.5px);
+    opacity: 0.45;
+    flex: 1 1 140px;
+    min-width: 120px;
+    max-width: 200px;
+}
+.thinking-chip:nth-child(2) { opacity: 0.32; filter: blur(2px); }
+.thinking-chip:nth-child(3) { opacity: 0.28; filter: blur(2.5px); flex-basis: 160px; }
+.thinking-chip:nth-child(4) { opacity: 0.22; filter: blur(3px); }
+/* Composer flouté tant que la scène de réflexion est visible */
+section.main:has(.thinking-stage) .stHorizontalBlock:has(.stTextInput),
+section.main:has(.thinking-stage) .composer-hint,
+section.main:has(.thinking-stage) .upload-preview,
+section.main:has(.thinking-stage) .web-on {
+    filter: blur(5px) !important;
+    opacity: 0.35 !important;
+    pointer-events: none !important;
+    user-select: none !important;
+}
 
 /* Messages — user à droite, IA à gauche */
 [data-testid="stChatMessage"] {
@@ -335,9 +411,9 @@ section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
 
 /* ── Input flottant style Claude ── */
 .input-zone {
-    position: fixed; bottom: 0; left: 0; right: 0;
+    position: fixed; bottom: 28px; left: 0; right: 0;
     background: linear-gradient(transparent, var(--bg) 40%);
-    padding: 28px 0 18px; z-index: 200;
+    padding: 20px 0 8px; z-index: 200;
     pointer-events: none;
 }
 .input-inner { max-width: 720px; margin: 0 auto; padding: 0 24px; }
@@ -489,52 +565,25 @@ section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"]
     min-width: 32px !important;
 }
 
-/* Upload / menu + style Claude */
+/* Upload / panneaux fichiers (hors menu +) */
 [data-testid="stFileUploader"] {
     background: transparent !important;
     border: none !important;
     padding: 0 !important;
-    margin: 0 !important;
+    margin: 0 0 8px !important;
 }
 [data-testid="stFileUploader"] section,
 [data-testid="stFileUploaderDropzone"] {
-    background: transparent !important;
-    border: none !important;
-    padding: 0 !important;
+    background: rgba(255,255,255,0.03) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    border-radius: 12px !important;
+    padding: 10px !important;
     min-height: 0 !important;
 }
-[data-testid="stFileUploaderDropzoneInstructions"] > div > span,
-[data-testid="stFileUploaderDropzoneInstructions"] span[data-testid="stFileUploaderDropzoneInstructionsText"],
-[data-testid="stFileUploader"] small,
 [data-testid="stFileUploader"] label {
-    display: none !important;
+    color: var(--text-muted) !important;
+    font-size: 12px !important;
 }
-[data-testid="stFileUploaderDropzoneInstructions"] {
-    display: none !important;
-}
-[data-testid="stFileUploaderDropzone"] button,
-[data-testid="stFileUploader"] button {
-    background: transparent !important;
-    color: var(--text) !important;
-    border: none !important;
-    border-radius: 10px !important;
-    font-size: 14px !important;
-    font-weight: 450 !important;
-    height: 40px !important;
-    min-height: 40px !important;
-    width: 100% !important;
-    max-width: none !important;
-    padding: 0 12px !important;
-    justify-content: flex-start !important;
-    text-align: left !important;
-    box-shadow: none !important;
-}
-[data-testid="stFileUploaderDropzone"] button:hover,
-[data-testid="stFileUploader"] button:hover {
-    background: rgba(255,255,255,0.06) !important;
-}
-/* Remplacer le libellé "Browse files" via overlay CSS n'est pas fiable :
-   on le masque et on pose un faux libellé au-dessus via .plus-menu-item */
 .plus-menu {
     min-width: 268px;
     padding: 4px 2px 2px;
@@ -557,30 +606,6 @@ section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"]
 .plus-menu-sep {
     height: 1px; margin: 6px 8px;
     background: rgba(255,255,255,0.08);
-}
-.plus-upload-slot {
-    position: relative;
-    margin: 0;
-}
-.plus-upload-slot::before {
-    content: "📎  Ajouter des fichiers ou images";
-    position: absolute;
-    left: 12px; top: 50%;
-    transform: translateY(-50%);
-    z-index: 2;
-    pointer-events: none;
-    font-size: 14px; font-weight: 450;
-    color: var(--text);
-    font-family: 'Inter', system-ui, sans-serif;
-}
-.plus-upload-slot [data-testid="stFileUploader"] {
-    opacity: 0.02;
-    position: relative;
-    z-index: 3;
-}
-.plus-upload-slot:hover {
-    background: rgba(255,255,255,0.06);
-    border-radius: 10px;
 }
 
 .stSelectbox > div > div {
@@ -686,16 +711,14 @@ div[data-testid="stPopoverBody"],
     border: none !important;
 }
 /* Menu + du composer : plus large */
-[data-testid="stPopoverBody"]:has(.plus-menu),
-[data-testid="stPopoverBody"]:has([data-testid="stFileUploader"]) {
+[data-testid="stPopoverBody"]:has(.plus-menu) {
     min-width: 260px !important;
     max-width: 320px !important;
     width: 280px !important;
     padding: 6px !important;
     border-radius: 14px !important;
 }
-[data-testid="stPopoverBody"]:has(.plus-menu) .stButton > button,
-[data-testid="stPopoverBody"]:has([data-testid="stFileUploader"]) .stButton > button {
+[data-testid="stPopoverBody"]:has(.plus-menu) .stButton > button {
     height: 40px !important;
     min-height: 40px !important;
     padding: 0 12px !important;
@@ -731,6 +754,54 @@ div[data-testid="stPopoverBody"],
     width: 6px; height: 6px; border-radius: 50%;
     background: #5b9fd4;
     box-shadow: 0 0 0 3px rgba(91,159,212,0.2);
+}
+
+/* Popup confirmation suppression */
+div[data-testid="stDialog"] {
+    width: min(400px, 94vw) !important;
+}
+div[data-testid="stDialog"] > div {
+    background: #2a2a28 !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    border-radius: 16px !important;
+    padding: 1rem 0.75rem 0.85rem !important;
+}
+div[data-testid="stDialog"] h2 {
+    color: var(--text) !important;
+    font-size: 1.15rem !important;
+    font-weight: 600 !important;
+    text-align: center !important;
+    margin: 0.2rem 0 0.75rem 0 !important;
+}
+.del-dialog { text-align: center; padding: 4px 8px 10px; }
+.del-dialog-ico {
+    font-size: 28px; line-height: 1;
+    margin-bottom: 10px; opacity: 0.9;
+}
+.del-dialog-msg {
+    color: var(--text);
+    font-size: 15px; line-height: 1.5;
+    margin: 0 0 8px 0;
+}
+.del-dialog-msg strong { color: #fff; font-weight: 600; }
+.del-dialog-hint {
+    color: var(--text-dim);
+    font-size: 12.5px; margin: 0 0 4px 0;
+}
+div[data-testid="stDialog"] div.st-key-confirm_del_yes button {
+    background: #c44b4b !important;
+    border: none !important;
+    color: #fff !important;
+}
+div[data-testid="stDialog"] div.st-key-confirm_del_yes button:hover {
+    background: #d45a5a !important;
+    border: none !important;
+    color: #fff !important;
+}
+div[data-testid="stDialog"] div.st-key-confirm_del_no button {
+    background: rgba(255,255,255,0.06) !important;
+    border: 1px solid rgba(255,255,255,0.12) !important;
+    color: var(--text) !important;
 }
 </style>
 """
@@ -1008,6 +1079,59 @@ def supprimer_discussion(cid: str) -> bool:
     return True
 
 
+def _fermer_confirm_suppression() -> None:
+    st.session_state.pop("confirm_del_id", None)
+
+
+@st.dialog("Supprimer la discussion", width="small", on_dismiss=_fermer_confirm_suppression)
+def _dialog_confirm_suppression() -> None:
+    """Popup de confirmation avant suppression d'une discussion."""
+    del_id = st.session_state.get("confirm_del_id")
+    cible = _trouver_discussion(del_id) if del_id else None
+    if not cible or cible.get("figee"):
+        _fermer_confirm_suppression()
+        st.rerun()
+        return
+
+    titre = (cible.get("titre") or "Nouvelle discussion").strip() or "Nouvelle discussion"
+    st.markdown(
+        f"""
+        <div class="del-dialog">
+          <div class="del-dialog-ico">🗑</div>
+          <p class="del-dialog-msg">
+            Voulez-vous vraiment supprimer<br>
+            <strong>« {html_lib.escape(titre)} »</strong>&nbsp;?
+          </p>
+          <p class="del-dialog-hint">Cette action est définitive.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    c_annuler, c_ok = st.columns(2)
+    with c_annuler:
+        if st.button("Annuler", key="confirm_del_no", use_container_width=True):
+            _fermer_confirm_suppression()
+            st.rerun()
+    with c_ok:
+        if st.button(
+            "Oui, supprimer",
+            key="confirm_del_yes",
+            use_container_width=True,
+            type="primary",
+        ):
+            if supprimer_discussion(del_id):
+                _fermer_confirm_suppression()
+                st.toast("Discussion supprimée")
+            else:
+                st.error("Suppression impossible.")
+            st.rerun()
+
+
+def afficher_dialog_suppression_si_besoin() -> None:
+    if st.session_state.get("confirm_del_id"):
+        _dialog_confirm_suppression()
+
+
 def modifier_message(idx: int, nouveau_contenu: str) -> bool:
     if _discussion_figee():
         return False
@@ -1057,6 +1181,7 @@ def nouvelle_discussion():
     st.session_state.en_cours = False
     st.session_state.show_audio = False
     st.session_state.show_camera = False
+    st.session_state.show_files = False
     st.session_state.contexte_projet = {}
     st.session_state.input_key += 1
     try:
@@ -1079,6 +1204,7 @@ def charger_discussion(cid: str):
             st.session_state.en_cours = False
             st.session_state.show_audio = False
             st.session_state.show_camera = False
+            st.session_state.show_files = False
             st.session_state.input_key += 1
             return
     # Fallback SQLite
@@ -1111,6 +1237,7 @@ def init():
         "web_search_actif": False,
         "show_audio": False,
         "show_camera": False,
+        "show_files": False,
         "utiliser_corpus_avec_fichier": True,
         "edit_msg_idx": None,
         "contexte_projet": {},
@@ -1576,34 +1703,8 @@ def url_valide(doc: dict) -> bool:
 
 
 # ── SIDEBAR ───────────────────────────────────────────────────────
-_LOGO_PATH = ROOT / "assets" / "assistdoc_logo.png"
+# Branding : st.logo() en tête de page (tout en haut de la sidebar)
 with st.sidebar:
-    if _LOGO_PATH.exists():
-        import base64
-
-        _logo_b64 = base64.b64encode(_LOGO_PATH.read_bytes()).decode("ascii")
-        st.markdown(
-            f"""
-            <div class="sb-brand">
-                <img class="sb-brand-icon" src="data:image/png;base64,{_logo_b64}" alt="AssistDoc" />
-                <div class="sb-brand-name">AssistDoc</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            """
-            <div class="sb-brand">
-                <div class="sb-brand-icon" style="background:linear-gradient(145deg,#5b9fd4,#3b7eb0);
-                  display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;
-                  border-radius:9px;width:32px;height:32px;">A</div>
-                <div class="sb-brand-name">AssistDoc</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
     barre_compte_sidebar()
 
     if st.button("＋  Nouvelle conversation", use_container_width=True, key="btn_new_chat", type="primary"):
@@ -1642,10 +1743,6 @@ with st.sidebar:
     with st.expander("Favoris & collections", expanded=False):
         if not est_compte_connecte():
             st.caption("Connectez-vous pour enregistrer des favoris et collections.")
-            if st.button("Se connecter", key="fav_need_login", use_container_width=True):
-                st.session_state.show_auth_dialog = True
-                st.session_state.auth_email_step = "email"
-                st.rerun()
         else:
             cols = _favoris().lister_collections()
             noms = [c["nom"] for c in cols] or ["Général"]
@@ -1754,28 +1851,6 @@ with st.sidebar:
             else:
                 st.session_state.pop("edit_titre_id", None)
 
-        # Confirmation suppression
-        del_id = st.session_state.get("confirm_del_id")
-        if del_id:
-            cible = _trouver_discussion(del_id)
-            if cible and not cible.get("figee"):
-                st.warning(f"Supprimer « {cible.get('titre', 'discussion')} » ?")
-                c_ok, c_no = st.columns(2)
-                with c_ok:
-                    if st.button("Oui, supprimer", key="confirm_del_yes", use_container_width=True, type="primary"):
-                        if supprimer_discussion(del_id):
-                            st.session_state.pop("confirm_del_id", None)
-                            st.toast("Discussion supprimée")
-                        else:
-                            st.error("Suppression impossible (figée ?).")
-                        st.rerun()
-                with c_no:
-                    if st.button("Annuler", key="confirm_del_no", use_container_width=True):
-                        st.session_state.pop("confirm_del_id", None)
-                        st.rerun()
-            else:
-                st.session_state.pop("confirm_del_id", None)
-
     # Export juste au-dessus du bloc connexion / déconnexion
     if st.session_state.messages:
         titre_export = _titre_discussion(st.session_state.messages)
@@ -1832,7 +1907,7 @@ with st.sidebar:
     if _u_sb:
         st.divider()
         if est_admin_session():
-            st.caption("🛡 Menu **Admin** disponible en haut de la barre latérale.")
+            st.caption("Menu **Admin** disponible en haut de la barre latérale.")
         if (_u_sb.get("tier") or "guest") == "guest":
             st.markdown(
                 """
@@ -1881,6 +1956,21 @@ if not st.session_state.pret:
 
 _traiter_actions_url()
 
+# Suggestion cliquée : démarrer tout de suite (évite le flash des chips d'accueil)
+_pending_sug = (st.session_state.pop("_sug", None) or "").strip()
+if _pending_sug and not st.session_state.en_cours and not st.session_state.get("force_login"):
+    st.session_state.messages.append({
+        "role": "user",
+        "content": _pending_sug,
+        "fichiers": list(st.session_state.fichiers_en_attente),
+    })
+    st.session_state.historique_llm.append({"role": "user", "content": _pending_sug})
+    st.session_state.fichiers_en_attente = []
+    st.session_state.input_key += 1
+    st.session_state.en_cours = True
+    sync_discussion()
+    st.rerun()
+
 # ── TOPBAR (auth via sidebar uniquement) ─────────────────────────
 st.markdown("""
 <div class="topbar">
@@ -1889,6 +1979,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 afficher_dialog_auth_si_besoin()
+afficher_dialog_suppression_si_besoin()
 
 
 # ── CHAT ──────────────────────────────────────────────────────────
@@ -1897,11 +1988,11 @@ col = st.columns([1, 12, 1])[1]
 with col:
     st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
 
-    if not st.session_state.messages:
-        if _LOGO_PATH.exists():
+    if not st.session_state.messages and not st.session_state.en_cours:
+        if _LOGO_FILE.exists():
             import base64 as _b64
 
-            _wlogo = _b64.b64encode(_LOGO_PATH.read_bytes()).decode("ascii")
+            _wlogo = _b64.b64encode(_LOGO_FILE.read_bytes()).decode("ascii")
             _wicon_html = (
                 f'<img class="wicon" src="data:image/png;base64,{_wlogo}" alt="AssistDoc" />'
             )
@@ -2037,19 +2128,29 @@ with col:
                             elif _enregistrer_feedback_msg(
                                 msg_idx, -1, f"[signalement] {texte}"
                             ):
-                                st.toast("⚠ Signalement envoyé à l'admin")
+                                st.toast("Signalement envoyé à l'admin")
                             else:
                                 st.error("Impossible d'enregistrer le signalement.")
 
-
     if st.session_state.en_cours:
-        gauche, _ = st.columns([5, 2])
-        with gauche:
-            with st.chat_message("assistant", avatar="assistant"):
-                st.markdown("""
+        st.markdown(
+            """
+            <div class="thinking-stage">
+              <div class="thinking-stage-bg"></div>
+              <div class="thinking-stage-fg">
                 <div class="tdots"><span></span><span></span><span></span></div>
                 <div class="tlabel">Recherche et génération…</div>
-                """, unsafe_allow_html=True)
+                <div class="thinking-chips">
+                  <div class="thinking-chip"></div>
+                  <div class="thinking-chip"></div>
+                  <div class="thinking-chip"></div>
+                  <div class="thinking-chip"></div>
+                </div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -2087,33 +2188,37 @@ with col:
                     st.session_state.auth_email_step = "email"
                     st.rerun()
             else:
-                # Un seul upload (fichiers + images), rendu comme une ligne de menu
-                st.markdown('<div class="plus-upload-slot">', unsafe_allow_html=True)
-                fichiers_up = st.file_uploader(
-                    "Ajouter des fichiers ou images",
-                    accept_multiple_files=True,
-                    type=None,
-                    key=f"up_files_{st.session_state.input_key}",
-                    label_visibility="collapsed",
-                )
-                st.markdown("</div>", unsafe_allow_html=True)
-                if fichiers_up:
-                    traites = [traiter_fichier(f) for f in fichiers_up]
-                    existants = {f["nom"] for f in st.session_state.fichiers_en_attente}
-                    ajoutés = 0
-                    for t in traites:
-                        if t["nom"] not in existants:
-                            st.session_state.fichiers_en_attente.append(t)
-                            ajoutés += 1
-                    if ajoutés:
-                        st.toast(f"{ajoutés} fichier(s) ajouté(s)")
-
-                if st.button("📷  Prendre une photo", use_container_width=True, key="btn_cam", type="secondary"):
-                    st.session_state.show_camera = not st.session_state.show_camera
+                if st.button(
+                    "📎  Ajouter des fichiers ou images",
+                    use_container_width=True,
+                    key="btn_files",
+                    type="secondary",
+                ):
+                    st.session_state.show_files = not st.session_state.get("show_files", False)
+                    st.session_state.show_camera = False
+                    st.session_state.show_audio = False
                     st.rerun()
 
-                if st.button("🎤  Enregistrer un audio", use_container_width=True, key="btn_aud", type="secondary"):
+                if st.button(
+                    "📷  Prendre une photo",
+                    use_container_width=True,
+                    key="btn_cam",
+                    type="secondary",
+                ):
+                    st.session_state.show_camera = not st.session_state.show_camera
+                    st.session_state.show_files = False
+                    st.session_state.show_audio = False
+                    st.rerun()
+
+                if st.button(
+                    "🎤  Enregistrer un audio",
+                    use_container_width=True,
+                    key="btn_aud",
+                    type="secondary",
+                ):
                     st.session_state.show_audio = not st.session_state.show_audio
+                    st.session_state.show_files = False
+                    st.session_state.show_camera = False
                     st.rerun()
 
             st.markdown('<div class="plus-menu-sep"></div>', unsafe_allow_html=True)
@@ -2133,25 +2238,50 @@ with col:
 
     bloque_invite = bool(st.session_state.get("force_login"))
     with c_input:
-        valeur = st.session_state.pop("_sug", "")
+        valeur = ""
         question = st.text_input(
-            "q", value=valeur,
+            "q", value="",
             placeholder=(
-                "Connectez-vous pour continuer…"
-                if bloque_invite
-                else "Poser une question…"
+                "Réflexion en cours…"
+                if st.session_state.en_cours
+                else (
+                    "Connectez-vous pour continuer…"
+                    if bloque_invite
+                    else "Poser une question…"
+                )
             ),
             key=f"inp_{st.session_state.input_key}",
             label_visibility="collapsed",
-            disabled=bloque_invite,
+            disabled=bloque_invite or st.session_state.en_cours,
         )
     with c_send:
         envoyer = st.button(
             "↑",
             use_container_width=True,
             key="btn_send",
-            disabled=bloque_invite,
+            disabled=bloque_invite or st.session_state.en_cours,
         )
+
+    # Panneau fichiers (si demandé via +)
+    if est_compte_connecte() and st.session_state.get("show_files"):
+        fichiers_up = st.file_uploader(
+            "Ajouter des fichiers ou images",
+            accept_multiple_files=True,
+            type=None,
+            key=f"up_files_{st.session_state.input_key}",
+        )
+        if fichiers_up:
+            traites = [traiter_fichier(f) for f in fichiers_up]
+            existants = {f["nom"] for f in st.session_state.fichiers_en_attente}
+            ajoutés = 0
+            for t in traites:
+                if t["nom"] not in existants:
+                    st.session_state.fichiers_en_attente.append(t)
+                    ajoutés += 1
+            if ajoutés:
+                st.session_state.show_files = False
+                st.toast(f"{ajoutés} fichier(s) ajouté(s)")
+                st.rerun()
 
     # Panneau caméra (si demandé via +)
     if est_compte_connecte() and st.session_state.show_camera:
