@@ -10,6 +10,7 @@ Usage :
     python scripts/migrer_vers_qdrant_cloud.py --dry-run     # vérifie source + cible, ne copie rien
     python scripts/migrer_vers_qdrant_cloud.py               # copie (reprend là où elle s'est arrêtée)
     python scripts/migrer_vers_qdrant_cloud.py --recreer     # supprime puis recrée la collection CIBLE
+    python scripts/migrer_vers_qdrant_cloud.py --verifier    # sans copie : index + comptes + recherches
 """
 
 from __future__ import annotations
@@ -98,10 +99,13 @@ def _comparer_recherches(source: QdrantClient, cible: QdrantClient, nom: str, n:
     for p in echantillon:
         a = source.query_points(nom, query=p.vector, limit=5).points
         b = cible.query_points(nom, query=p.vector, limit=5).points
-        ids_a, ids_b = [x.id for x in a], [x.id for x in b]
-        meme = ids_a[0] == ids_b[0] and len(set(ids_a) & set(ids_b)) >= 4
+        # Les chunks au texte identique ont des scores égaux : l'ordre entre ex æquo peut différer,
+        # on compare donc les scores plutôt que les identifiants.
+        scores_a, scores_b = [x.score for x in a], [x.score for x in b]
+        meme = a[0].id == b[0].id and all(abs(x - y) < 1e-3 for x, y in zip(scores_a, scores_b))
         ok &= meme
-        print(f"   {'OK ' if meme else 'DIFF'} point {p.id} : top-5 commun = {len(set(ids_a) & set(ids_b))}/5")
+        communs = len({x.id for x in a} & {x.id for x in b})
+        print(f"   {'OK ' if meme else 'DIFF'} point {p.id} : scores identiques, ids communs {communs}/5")
     return ok
 
 
@@ -113,6 +117,7 @@ def main() -> None:
     ap.add_argument("--lot", type=int, default=256, help="points par upsert")
     ap.add_argument("--recreer", action="store_true", help="supprime puis recrée la collection CIBLE")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--verifier", action="store_true", help="sans copie : réactive l'index et vérifie la cible")
     args = ap.parse_args()
     nom = args.collection
 
@@ -127,6 +132,12 @@ def main() -> None:
 
     if args.dry_run:
         print("[dry-run] aucune écriture.")
+        return
+
+    if args.verifier:
+        if not existe:
+            sys.exit(f"La collection cible '{nom}' n'existe pas")
+        _finaliser(source, cible, nom, total)
         return
 
     if existe and args.recreer:
@@ -165,12 +176,18 @@ def main() -> None:
             break
     print()
 
+    _finaliser(source, cible, nom, total)
+
+
+def _finaliser(source: QdrantClient, cible: QdrantClient, nom: str, total: int) -> None:
     cible.update_collection(nom, optimizers_config=models.OptimizersConfigDiff(indexing_threshold=20000))
     print("[*] Indexation HNSW réactivée — attente de la fin de l'optimisation…")
-    for _ in range(120):
-        etat = cible.get_collection(nom)
-        if etat.status == models.CollectionStatus.GREEN:
-            break
+    for _ in range(240):
+        try:
+            if cible.get_collection(nom).status == models.CollectionStatus.GREEN:
+                break
+        except Exception as e:  # coupure réseau passagère : on continue d'attendre
+            print(f"   ! état indisponible ({type(e).__name__}), nouvel essai")
         time.sleep(5)
 
     n_cible = cible.count(nom, exact=True).count
