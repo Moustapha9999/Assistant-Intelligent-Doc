@@ -127,7 +127,7 @@ La CI GitHub Actions (lint + pytest avec `requirements-dev.txt`) doit être vert
    - Repository : `Moustapha9999/Assistant-Intelligent-Doc`
    - Branch : `master`
    - Main file path : `src/app/main.py`
-   - App URL : par ex. `assistdoc` → `https://assistdoc.streamlit.app`
+   - App URL : `assistant-intelligent-doc` → `https://assistant-intelligent-doc.streamlit.app`
 3. **Advanced settings** :
    - Python version : **3.12**
    - Secrets : coller le contenu de [`.streamlit/secrets.toml.example`](../.streamlit/secrets.toml.example)
@@ -144,9 +144,12 @@ La CI GitHub Actions (lint + pytest avec `requirements-dev.txt`) doit être vert
 
 ### OAuth (optionnel)
 
-Remplacer `http://localhost:8501/` par `https://<app>.streamlit.app/` :
-- dans les secrets (`GITHUB_OAUTH_REDIRECT_URI`, `GOOGLE_OAUTH_REDIRECT_URI`) ;
-- dans la console GitHub (OAuth App → *Authorization callback URL*) et Google (URI de redirection).
+URL de redirection en production : `https://assistant-intelligent-doc.streamlit.app/`
+- secrets : `GITHUB_OAUTH_REDIRECT_URI`, `GOOGLE_OAUTH_REDIRECT_URI`, `STREAMLIT_PUBLIC_URL` ;
+- Google Cloud Console → client OAuth → *URI de redirection autorisés* : **ajouter** cette URL
+  (garder `http://localhost:8501/` pour le local) ;
+- GitHub → OAuth App → *Authorization callback URL* : une seule URL par application ; créer une
+  seconde OAuth App « prod » pour ne pas casser la connexion locale.
 
 ---
 
