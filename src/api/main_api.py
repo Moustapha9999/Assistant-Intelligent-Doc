@@ -11,6 +11,7 @@ import json
 import os
 import subprocess
 import sys
+import uuid
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Optional
@@ -29,6 +30,7 @@ if str(ROOT_SRC) not in sys.path:
 from api.auth import exiger_admin_api, exiger_api_key, verifier_secret_webhook
 from app.historique_sqlite import HistoriqueSQLite
 from core.orchestrateur import OrchestrateurAssistant
+from securite.acces import AccesRefuse
 
 app = FastAPI(title="Assistant Intelligent Doc API", version="1.1.0")
 app.add_middleware(
@@ -48,7 +50,7 @@ class QuestionRequest(BaseModel):
 
 
 class FeedbackRequest(BaseModel):
-    conversation_id: str
+    conversation_id: Optional[str] = Field(default=None, max_length=64)
     message_idx: int = Field(ge=0)
     note: int = Field(ge=-1, le=5)  # 👍=1, 👎=-1, ou Likert 1-5
     commentaire: str = Field(default="", max_length=2_000)
@@ -67,6 +69,17 @@ def orchestrateur() -> OrchestrateurAssistant:
 @lru_cache(maxsize=1)
 def historique() -> HistoriqueSQLite:
     return HistoriqueSQLite()
+
+
+def proprietaire_api(owner: str) -> Optional[str]:
+    """Propriétaire des données privées, dérivé uniquement de la clé API validée.
+
+    Sans clé configurée (mode anonyme), il n'existe pas d'identité stable : aucune donnée
+    privée n'est lue ni rattachée (pas de propriétaire commun « anonymous »).
+    """
+    if not owner or owner == "anonymous":
+        return None
+    return f"api:{owner}"
 
 
 def _lancer_sync(since: Optional[str], run: bool) -> None:
@@ -126,6 +139,7 @@ def ask(
             top_k=requete.top_k,
             utiliser_corpus=requete.utiliser_corpus,
             stream=False,
+            user_id=proprietaire_api(owner),
         )
         return {
             "answer": resultat.reponse,
@@ -149,12 +163,22 @@ def feedback(
     payload: FeedbackRequest,
     owner: str = Depends(exiger_api_key),
 ) -> dict[str, str]:
-    historique().enregistrer_feedback(
-        payload.conversation_id,
-        payload.message_idx,
-        payload.note,
-        payload.commentaire,
-    )
+    proprietaire = proprietaire_api(owner)
+    if proprietaire is None:
+        if payload.conversation_id:
+            raise HTTPException(status_code=404, detail="Conversation introuvable.")
+        # Avis isolé, jamais relu par l'appelant : propriétaire unique par requête
+        proprietaire = f"api:anonyme:{uuid.uuid4()}"
+    try:
+        historique().enregistrer_feedback(
+            payload.conversation_id,
+            payload.message_idx,
+            payload.note,
+            payload.commentaire,
+            owner_id=proprietaire,
+        )
+    except AccesRefuse:
+        raise HTTPException(status_code=404, detail="Conversation introuvable.") from None
     return {"status": "enregistre", "owner": owner}
 
 

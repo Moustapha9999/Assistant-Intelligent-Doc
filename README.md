@@ -212,6 +212,29 @@ Une source n'est présentée comme dépôt GitHub que si `nom_complet` (`owner/r
 Les étoiles proviennent de l'API GitHub à la date `DATE_COLLECTE_GITHUB`.
 `scripts/corriger_provenance_corpus.py` corrige les métadonnées du corpus existant.
 
+### Isolation des utilisateurs
+
+Chaque visiteur, invité compris, reçoit un identifiant aléatoire (`users.id`). Cet identifiant
+est l'unique propriétaire de ses conversations, messages, favoris, préférences et quotas.
+
+- **Identité** : [src/app/identite.py](src/app/identite.py) résout l'identité côté serveur à
+  chaque exécution. Le navigateur ne conserve qu'un jeton aléatoire, dans le cookie
+  `assistdoc_sid`. La base ne stocke que l'empreinte SHA-256 de ce jeton, avec une expiration
+  (30 jours pour un invité, 14 jours pour un compte) et une révocation possible.
+- **Connexion** : un nouveau jeton remplace l'ancien, qui est révoqué. **Déconnexion** : le jeton
+  est révoqué et une nouvelle identité invitée est créée. Aucune fusion automatique n'a lieu.
+- **OAuth** : le compte est rattaché par l'identifiant du fournisseur, jamais par l'e-mail.
+  L'état `state` est stocké côté serveur, à usage unique, lié à la session et valable 10 minutes.
+- **Persistance** : toutes les méthodes de `HistoriqueSQLite` et de `FavorisSQLite` exigent un
+  `owner_id`. L'interface y accède via `VueProprietaire`, qui impose le propriétaire courant.
+  Une ressource étrangère est traitée comme une ressource introuvable.
+- **API** : le propriétaire est dérivé de la clé `X-API-Key` (`api:<nom>`). Sans clé configurée,
+  aucune donnée privée n'est lue ni rattachée.
+- **Migration** : `python scripts/migrer_isolation_sqlite.py --dry-run` produit un rapport, puis
+  la commande sans `--dry-run` applique la migration. La base est sauvegardée au préalable
+  (`*.avant_isolation_<date>.bak`) et aucune ligne n'est supprimée. Les données antérieures sans
+  propriétaire restent en quarantaine et ne sont plus jamais affichées.
+
 ---
 
 ## Configuration

@@ -6,10 +6,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from app.favoris_sqlite import FavorisSQLite
 from app.gestionnaire_fichiers import formater_pour_prompt
 from app.admin_corpus import stats_corpus, lister_repos_indexes
+from securite.acces import VueProprietaire
 
 
 def test_favoris_collections_et_docs(tmp_path):
-    fav = FavorisSQLite(tmp_path / "favoris.db")
+    fav = VueProprietaire(FavorisSQLite(tmp_path / "favoris.db"), "u-test")
     cid = fav.creer_collection("API")
     fid = fav.ajouter_favori(
         {

@@ -1,4 +1,8 @@
-"""Mémoire long terme : préférences utilisateur persistantes (SQLite)."""
+"""Mémoire long terme : préférences utilisateur persistantes (SQLite).
+
+Isolée par utilisateur : `user_id` = users.id (ou « api:<propriétaire de clé> »).
+Sans identité (user_id None ou vide), la mémoire est désactivée : rien n'est lu ni écrit.
+"""
 
 from __future__ import annotations
 
@@ -13,8 +17,6 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import config
-
-_USER_ID = "default"
 
 _SIGNAUX = {
     "stack_fastapi": (r"\bfastapi\b", "fastapi"),
@@ -54,7 +56,9 @@ class MemoireLongue:
                 """
             )
 
-    def charger(self, user_id: str = _USER_ID) -> Dict[str, str]:
+    def charger(self, user_id: Optional[str] = None) -> Dict[str, str]:
+        if not (user_id or "").strip():
+            return {}
         with self._connect() as conn:
             rows = conn.execute(
                 "SELECT cle, valeur FROM preferences_utilisateur WHERE user_id = ?",
@@ -62,7 +66,9 @@ class MemoireLongue:
             ).fetchall()
         return {r["cle"]: r["valeur"] for r in rows}
 
-    def definir(self, cle: str, valeur: str, user_id: str = _USER_ID) -> None:
+    def definir(self, cle: str, valeur: str, user_id: Optional[str] = None) -> None:
+        if not (user_id or "").strip():
+            return
         now = datetime.now(timezone.utc).isoformat()
         with self._connect() as conn:
             conn.execute(
@@ -76,13 +82,13 @@ class MemoireLongue:
                 (user_id, cle, valeur, now),
             )
 
-    def fusionner(self, prefs: Dict[str, Any], user_id: str = _USER_ID) -> None:
+    def fusionner(self, prefs: Dict[str, Any], user_id: Optional[str] = None) -> None:
         for cle, valeur in (prefs or {}).items():
             if valeur is None or valeur == "":
                 continue
             self.definir(str(cle), str(valeur), user_id=user_id)
 
-    def extraire_depuis_texte(self, texte: str) -> Dict[str, str]:
+    def extraire_depuis_texte(self, texte: str, user_id: Optional[str] = None) -> Dict[str, str]:
         """Déduit des préférences depuis un message utilisateur."""
         t = (texte or "").lower()
         trouvees: Dict[str, str] = {}
@@ -97,7 +103,7 @@ class MemoireLongue:
             # Garde les stacks uniques, max 5
             existantes = []
             try:
-                existantes = json.loads(self.charger().get("stacks", "[]"))
+                existantes = json.loads(self.charger(user_id).get("stacks", "[]"))
             except Exception:
                 existantes = []
             merged = []
@@ -119,9 +125,11 @@ class MemoireLongue:
         self,
         question: str,
         mode: str = "",
-        user_id: str = _USER_ID,
+        user_id: Optional[str] = None,
     ) -> Dict[str, str]:
-        extras = self.extraire_depuis_texte(question)
+        if not (user_id or "").strip():
+            return {}
+        extras = self.extraire_depuis_texte(question, user_id=user_id)
         if mode in {"cours", "expert"} or "apprendre" in extras:
             extras["apprendre"] = "oui"
         if mode == "projet":
@@ -131,7 +139,6 @@ class MemoireLongue:
         return self.charger(user_id)
 
     def formater_pour_prompt(self, prefs: Optional[Dict[str, str]] = None) -> str:
-        prefs = prefs if prefs is not None else self.charger()
         if not prefs:
             return ""
         lignes = ["Préférences long terme de l'utilisateur :"]

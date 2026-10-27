@@ -36,23 +36,17 @@ from app.auth_google import (
     nouveau_state as nouveau_state_google,
     url_autorisation as url_autorisation_google,
 )
+from app import identite as _identite
 from app.quotas import quota_pour
-from app.utilisateurs_sqlite import UtilisateursSQLite
 
-
-@st.cache_resource
-def users_db() -> UtilisateursSQLite:
-    return UtilisateursSQLite()
-
-
+users_db = _identite.users_db
 _users_db = users_db
 
 
 def utilisateur_session() -> Optional[Dict[str, Any]]:
-    uid = st.session_state.get("auth_user_id")
-    if not uid:
-        return None
-    u = _users_db().obtenir(uid)
+    """Utilisateur de l'identité courante, relu en base (rôle et suspension à jour)."""
+    ident = _identite.identite_session()
+    u = _users_db().obtenir(ident.user_id)
     if not u or u.get("suspended"):
         return None
     return u
@@ -125,14 +119,18 @@ def exiger_admin(*, autoriser_login: bool = True) -> bool:
     return False
 
 
+_CLES_UI_AUTH = (
+    "oauth_provider",
+    "github_auth_url", "google_auth_url", "apple_auth_url",
+    "force_login", "show_auth_dialog",
+    "auth_email_step", "auth_pending_email",
+)
+
+
 def _appliquer_user(user: Dict[str, Any]) -> None:
-    st.session_state.auth_ok = True
-    st.session_state.auth_user_id = user["id"]
-    st.session_state.auth_user = (
-        user.get("email") or user.get("github_login") or user.get("display_name") or "user"
-    )
-    st.session_state.auth_tier = user.get("tier") or "guest"
-    for k in ("force_login", "show_auth_dialog", "auth_email_step", "auth_pending_email"):
+    """Connexion réussie : rotation du jeton de session vers le compte authentifié."""
+    _identite.connecter(user)
+    for k in _CLES_UI_AUTH:
         st.session_state.pop(k, None)
 
 
@@ -140,22 +138,25 @@ def assurer_session_invite() -> Dict[str, Any]:
     u = utilisateur_session()
     if u:
         return u
-    user = _users_db().creer_invite("Invité")
-    _appliquer_user(user)
-    return user
+    # Compte suspendu ou supprimé pendant la session : nouvelle identité invitée
+    _identite.deconnecter()
+    return utilisateur_session() or {}
 
 
 def deconnecter() -> None:
-    for k in (
-        "auth_ok", "auth_user_id", "auth_user", "auth_tier",
-        "github_oauth_state", "google_oauth_state", "apple_oauth_state",
-        "oauth_provider",
-        "github_auth_url", "google_auth_url", "apple_auth_url",
-        "force_login", "show_auth_dialog",
-        "auth_email_step", "auth_pending_email",
-    ):
+    for k in _CLES_UI_AUTH:
         st.session_state.pop(k, None)
-    assurer_session_invite()
+    _identite.deconnecter()
+
+
+def _oauth_lier_session() -> bool:
+    return os.getenv("OAUTH_STATE_LIER_SESSION", "1").strip().lower() not in {"0", "false", "non", "no"}
+
+
+def _etat_oauth_valide(state: str, fournisseur: str) -> bool:
+    return _users_db().consommer_etat_oauth(
+        state, fournisseur, _identite.jeton_session_courant(), exiger_meme_session=_oauth_lier_session()
+    )
 
 
 def _redirect_oauth() -> str:
@@ -211,12 +212,10 @@ def _traiter_callback_oauth() -> None:
     if provider == "apple":
         if not apple_oauth_configure():
             return
-        attendu = st.session_state.get("apple_oauth_state")
-        if attendu and state_s and state_s != attendu:
-            st.error("État OAuth Apple invalide.")
+        if not _etat_oauth_valide(state_s, "apple"):
+            st.error("État OAuth Apple invalide ou expiré. Recommencez la connexion.")
             return
         profile, err = echanger_code_apple(str(code))
-        st.session_state.pop("apple_oauth_state", None)
         st.session_state.pop("apple_auth_url", None)
         st.session_state.pop("oauth_provider", None)
         if not profile:
@@ -235,12 +234,10 @@ def _traiter_callback_oauth() -> None:
     if provider == "google":
         if not google_oauth_configure():
             return
-        attendu = st.session_state.get("google_oauth_state")
-        if attendu and state_s and state_s != attendu:
-            st.error("État OAuth Google invalide.")
+        if not _etat_oauth_valide(state_s, "google"):
+            st.error("État OAuth Google invalide ou expiré. Recommencez la connexion.")
             return
         profile, err = echanger_code_google(str(code), redirect)
-        st.session_state.pop("google_oauth_state", None)
         st.session_state.pop("google_auth_url", None)
         st.session_state.pop("oauth_provider", None)
         if not profile:
@@ -259,12 +256,10 @@ def _traiter_callback_oauth() -> None:
     if provider == "github":
         if not github_oauth_configure():
             return
-        attendu = st.session_state.get("github_oauth_state")
-        if attendu and state_s and state_s != attendu:
-            st.error("État OAuth GitHub invalide.")
+        if not _etat_oauth_valide(state_s, "github"):
+            st.error("État OAuth GitHub invalide ou expiré. Recommencez la connexion.")
             return
         profile, err = echanger_code_github(str(code), redirect)
-        st.session_state.pop("github_oauth_state", None)
         st.session_state.pop("github_auth_url", None)
         st.session_state.pop("oauth_provider", None)
         if not profile:
@@ -282,30 +277,32 @@ def _traiter_callback_oauth() -> None:
 
 
 def exiger_auth() -> bool:
+    _identite.identite_courante()
     _traiter_callback_oauth()
     assurer_session_invite()
     return True
 
 
+def _nouvel_etat(fournisseur: str, generer) -> str:
+    state = generer()
+    _users_db().enregistrer_etat_oauth(state, fournisseur, _identite.jeton_session_courant())
+    st.session_state.oauth_provider = fournisseur
+    return state
+
+
 def _lancer_github() -> None:
-    state = nouveau_state_github()
-    st.session_state.oauth_provider = "github"
-    st.session_state.github_oauth_state = state
+    state = _nouvel_etat("github", nouveau_state_github)
     st.session_state["github_auth_url"] = url_autorisation_github(_redirect_oauth(), state)
 
 
 def _lancer_google() -> None:
-    state = nouveau_state_google()
-    st.session_state.oauth_provider = "google"
-    st.session_state.google_oauth_state = state
+    state = _nouvel_etat("google", nouveau_state_google)
     redirect = os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "").strip() or _redirect_oauth()
     st.session_state["google_auth_url"] = url_autorisation_google(redirect, state)
 
 
 def _lancer_apple() -> None:
-    state = nouveau_state_apple()
-    st.session_state.oauth_provider = "apple"
-    st.session_state.apple_oauth_state = state
+    state = _nouvel_etat("apple", nouveau_state_apple)
     st.session_state["apple_auth_url"] = url_autorisation_apple(state)
 
 

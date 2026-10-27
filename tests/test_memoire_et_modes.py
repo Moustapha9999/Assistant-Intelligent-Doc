@@ -84,8 +84,12 @@ def test_memoire_longue_et_journal(tmp_path):
     prefs = ml.mettre_a_jour_depuis_echange(
         "Je préfère FastAPI et des réponses détaillées",
         mode="technique",
+        user_id="u-alice",
     )
     assert "stacks" in prefs or "long" in prefs or "fastapi" in json.dumps(prefs)
+    assert ml.charger("u-bob") == {}
+    assert ml.mettre_a_jour_depuis_echange("Je préfère Django", mode="technique") == {}
+    assert ml.charger("u-alice") == prefs
 
     log = tmp_path / "interactions.jsonl"
     j = JournalAmelioration(chemin=log)

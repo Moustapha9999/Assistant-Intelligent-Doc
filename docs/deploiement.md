@@ -162,6 +162,9 @@ URL de redirection en production : `https://assistant-intelligent-doc.streamlit.
 | « Comment écrire un Dockerfile multi-stage ? » | citation du corpus Docker, pas seulement du web |
 | Question d'actualité | bloc 🌐 Ressources web alimenté par Tavily |
 | Connexion admin | identifiants des secrets |
+| Deux navigateurs (ou une fenêtre privée) en invité | aucune conversation de l'un visible chez l'autre |
+| Rechargement de la page en invité | même historique (cookie `assistdoc_sid`) |
+| Connexion puis déconnexion | historique du compte masqué après la déconnexion, nouvel invité vide |
 
 ---
 
@@ -176,6 +179,24 @@ URL de redirection en production : `https://assistant-intelligent-doc.streamlit.
 - **Mise en veille** : l'app s'endort sans trafic ; le réveil recharge les modèles (≈ 1 min).
 - **Non disponibles sur Streamlit Cloud** : l'API FastAPI (`src/api`) et *Sign in with Apple*
   (callback servi par l'API). Ils restent utilisables en local / Docker.
+
+## Identité et sessions (isolation des utilisateurs)
+
+- Le cookie `assistdoc_sid` contient seulement un jeton aléatoire, validé côté serveur. Il est
+  `Secure` en HTTPS, `SameSite=Lax`, et sa durée de vie est limitée. Streamlit ne permet pas
+  d'émettre d'en-tête `Set-Cookie` : le cookie est écrit en JavaScript et **ne peut donc pas être
+  `HttpOnly`**. Il ne contient aucune donnée personnelle.
+- Si le navigateur bloque les cookies, chaque onglet reçoit sa propre identité invitée.
+  L'isolation est préservée, mais l'historique invité ne survit pas au rechargement de la page.
+- Retour OAuth : par défaut, l'état `state` doit revenir dans la même session navigateur. Si la
+  connexion Google ou GitHub échoue avec « État OAuth invalide » alors que les cookies sont
+  actifs, le secret `OAUTH_STATE_LIER_SESSION = "0"` conserve le contrôle d'usage unique et
+  d'expiration, sans exiger la même session.
+- Durées réglables : `SESSION_JOURS_INVITE` (30 par défaut) et `SESSION_JOURS_COMPTE` (14).
+- Se connecter ne transfère pas l'historique invité vers le compte : il reste rattaché à
+  l'identité invitée, sans fusion automatique.
+- L'interrupteur « recherche web » reste un réglage global du serveur, partagé par toutes les
+  sessions. Il ne donne accès à aucune donnée privée.
 
 ---
 

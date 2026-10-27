@@ -154,6 +154,23 @@ def export_markdown(
     return "\n".join(lignes)
 
 
+def exporter_conversation(historique: Any, conversation_id: str, *, owner_id: str, format: str = "md"):
+    """Export d'une conversation enregistrée, après contrôle du propriétaire.
+
+    Lève `AccesRefuse` si la conversation n'existe pas ou appartient à quelqu'un d'autre.
+    """
+    from securite.acces import AccesRefuse
+
+    meta = historique.obtenir_conversation(conversation_id, owner_id=owner_id)
+    if not meta:
+        raise AccesRefuse("Conversation introuvable")
+    messages = historique.charger_messages(conversation_id, owner_id=owner_id)
+    titre = meta.get("titre") or _titre_conversation(messages)
+    if format == "pdf":
+        return export_pdf(messages, titre=titre, conversation_id=conversation_id)
+    return export_markdown(messages, conversation_id=conversation_id, titre=titre)
+
+
 def _fonts_candidates() -> List[Tuple[Path, Optional[Path]]]:
     """(regular, bold_or_none)."""
     return [

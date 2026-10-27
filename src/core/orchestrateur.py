@@ -71,7 +71,9 @@ class OrchestrateurAssistant:
         mode_force: Optional[str] = None,
         contexte_projet_existant: Optional[Dict[str, Any]] = None,
         utiliser_corpus: bool = True,
+        user_id: Optional[str] = None,
     ) -> ResultatOrchestration:
+        """`user_id` : identité validée côté serveur ; sans elle, pas de mémoire long terme."""
         historique = historique or []
         fichiers = fichiers or []
         # Vision réelle : analyser les images avant classification / prompt
@@ -116,7 +118,9 @@ class OrchestrateurAssistant:
 
         # Mémoires
         prefs_session = self.memoire.extraire_preferences(historique)
-        prefs_longues = self.memoire_longue.mettre_a_jour_depuis_echange(question, mode=analyse.mode)
+        prefs_longues = self.memoire_longue.mettre_a_jour_depuis_echange(
+            question, mode=analyse.mode, user_id=user_id
+        )
         ctx_projet = self.memoire_projet.extraire_ou_mettre_a_jour(
             historique=historique,
             question=question,

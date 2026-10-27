@@ -28,15 +28,17 @@ if str(_SRC) not in sys.path:
 import streamlit as st
 
 import app.auth_basique as _auth_basique
+from app import identite as _identite
 
 # Évite le cache Python/Streamlit d'une ancienne version du module auth
 importlib.reload(_auth_basique)
 
-assurer_session_invite = _auth_basique.assurer_session_invite
 est_admin_session = _auth_basique.est_admin_session
 
-# Session invité (ou compte déjà connecté) avant de construire les menus
-assurer_session_invite()
+# Identité validée côté serveur (session ou cookie, sinon invité unique) avant les menus,
+# puis retour OAuth éventuel (rotation de session vers le compte).
+_auth_basique.exiger_auth()
+_identite.synchroniser_cookie()
 
 _pages = [
     st.Page(

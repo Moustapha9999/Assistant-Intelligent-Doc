@@ -25,6 +25,8 @@ from core.orchestrateur import OrchestrateurAssistant
 from app.gestionnaire_fichiers import traiter_fichier, formater_pour_prompt, transcrire_audio
 from app.historique_sqlite import HistoriqueSQLite
 from app.favoris_sqlite import FavorisSQLite
+from app.identite import identite_session
+from securite.acces import VueProprietaire
 from app.auth_basique import (
     afficher_dialog_auth_si_besoin,
     barre_compte_sidebar,
@@ -61,15 +63,27 @@ if _LOGO_FILE.exists():
 # Session invité automatique (style ChatGPT) — pas d'écran bloquant
 exiger_auth()
 
-# Persistance SQLite
+# Persistance SQLite (connexions partagées ; chaque accès est lié au propriétaire courant)
 @st.cache_resource
-def _db() -> HistoriqueSQLite:
+def _db_base() -> HistoriqueSQLite:
     return HistoriqueSQLite()
 
 
 @st.cache_resource
-def _favoris() -> FavorisSQLite:
+def _favoris_base() -> FavorisSQLite:
     return FavorisSQLite()
+
+
+def _owner() -> str:
+    return identite_session().user_id
+
+
+def _db() -> VueProprietaire:
+    return VueProprietaire(_db_base(), _owner())
+
+
+def _favoris() -> VueProprietaire:
+    return VueProprietaire(_favoris_base(), _owner())
 
 
 CSS = """
@@ -1248,7 +1262,22 @@ def init():
         if k not in st.session_state:
             st.session_state[k] = v
 
-    # Charger historique SQLite si session vide
+    # Changement d'identité (connexion, déconnexion, session expirée) : rien de l'état
+    # précédent (conversation ouverte, messages, fichiers, contexte) ne doit être réutilisé.
+    owner = _owner()
+    if st.session_state.get("conversations_owner") != owner:
+        for k in (
+            "messages", "historique_llm", "conversations", "conversation_id",
+            "fichiers_en_attente", "contexte_projet", "edit_msg_idx",
+        ):
+            st.session_state[k] = d[k] if not isinstance(d[k], (list, dict)) else type(d[k])()
+        for k in list(st.session_state.keys()):
+            if str(k).startswith(("feedback_envoye", "confirm_del_id", "edit_titre_id")):
+                st.session_state.pop(k, None)
+        st.session_state.conversations_owner = owner
+        st.session_state.input_key += 1
+
+    # Charger l'historique SQLite du propriétaire courant si session vide
     if not st.session_state.conversations:
         try:
             rows = _db().lister_conversations(40)
@@ -2422,6 +2451,7 @@ if st.session_state.en_cours and st.session_state.messages:
                 mode_force=mode_force,
                 contexte_projet_existant=st.session_state.get("contexte_projet") or {},
                 utiliser_corpus=utiliser_corpus,
+                user_id=_owner(),
             )
 
         if getattr(resultat, "contexte_projet", None):

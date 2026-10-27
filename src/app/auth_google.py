@@ -65,9 +65,8 @@ def echanger_code(code: str, redirect_uri: str) -> Tuple[Optional[Dict[str, Any]
             if not google_id:
                 return None, "Profil Google invalide (sub manquant)."
             email = (profile.get("email") or "").strip().lower() or None
-            if email and profile.get("email_verified") is False:
-                # Accepter quand même si Google renvoie l'email (souvent True)
-                pass
+            if profile.get("email_verified") is not True:
+                email = None
             return {
                 "google_id": google_id,
                 "email": email,

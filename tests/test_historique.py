@@ -3,10 +3,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from app.historique_sqlite import HistoriqueSQLite
+from securite.acces import VueProprietaire
 
 
 def test_conversation_messages_et_feedback(tmp_path):
-    historique = HistoriqueSQLite(tmp_path / "historique.db")
+    base = HistoriqueSQLite(tmp_path / "historique.db")
+    historique = VueProprietaire(base, "u-test")
     conversation_id = historique.creer_conversation("Test")
     historique.sauvegarder_conversation(
         conversation_id, "Test",
@@ -17,14 +19,15 @@ def test_conversation_messages_et_feedback(tmp_path):
         {"role": "assistant", "content": "Salut"},
     ]
     historique.enregistrer_feedback(conversation_id, 1, 5, "Très utile")
-    with historique._connect() as conn:
-        feedback = conn.execute("SELECT note, commentaire FROM feedback").fetchone()
+    with base._connect() as conn:
+        feedback = conn.execute("SELECT note, commentaire, owner_id FROM feedback").fetchone()
     assert feedback["note"] == 5
     assert feedback["commentaire"] == "Très utile"
+    assert feedback["owner_id"] == "u-test"
 
 
 def test_figer_renommer_supprimer(tmp_path):
-    historique = HistoriqueSQLite(tmp_path / "historique2.db")
+    historique = VueProprietaire(HistoriqueSQLite(tmp_path / "historique2.db"), "u-test")
     cid = historique.creer_conversation("Ancien titre")
     historique.sauvegarder_conversation(
         cid, "Ancien titre",
@@ -51,7 +54,7 @@ def test_figer_renommer_supprimer(tmp_path):
 
 
 def test_lister_figees_en_tete(tmp_path):
-    historique = HistoriqueSQLite(tmp_path / "historique3.db")
+    historique = VueProprietaire(HistoriqueSQLite(tmp_path / "historique3.db"), "u-test")
     a = historique.creer_conversation("A")
     b = historique.creer_conversation("B")
     historique.figer_conversation(b, True)
