@@ -41,7 +41,9 @@ from app import export_conversation as _export_conversation
 importlib.reload(_export_conversation)
 export_markdown = _export_conversation.export_markdown
 export_pdf = _export_conversation.export_pdf
-from retrieval.citations import citation_courte, enrichir_document
+from config import DATE_COLLECTE_GITHUB
+from retrieval.citations import citation_courte, determiner_provenance, enrichir_document
+from web.ressources import sources_web_reelles
 import streamlit.components.v1 as components
 import html as html_lib
 
@@ -757,10 +759,10 @@ div[data-testid="stPopoverBody"],
 }
 
 /* Popup confirmation suppression */
-div[data-testid="stDialog"] {
+div[data-testid="stDialog"] div[role="dialog"] {
     width: min(400px, 94vw) !important;
 }
-div[data-testid="stDialog"] > div {
+div[data-testid="stDialog"] div[role="dialog"] {
     background: #2a2a28 !important;
     border: 1px solid rgba(255,255,255,0.1) !important;
     border-radius: 16px !important;
@@ -1322,15 +1324,7 @@ def activer_recherche_web(actif: bool) -> None:
 
 
 def _est_source_enrichie(doc: dict) -> bool:
-    repo = (doc.get("nom_complet") or "").lower()
-    src = (doc.get("source_file") or "").lower()
-    return (
-        bool(doc.get("source_enrichissement"))
-        or repo.startswith("enrichissement/")
-        or "knowledge/" in repo
-        or src.startswith("enrichissement/")
-        or "knowledge/" in src
-    )
+    return determiner_provenance(doc) != "github"
 
 
 def afficher_sources(docs: list, msg_idx: int = 0):
@@ -1342,26 +1336,31 @@ def afficher_sources(docs: list, msg_idx: int = 0):
     col_noms = list(col_ids.keys()) or ["Général"]
     for i, raw in enumerate(docs[:6], 1):
         doc = enrichir_document(raw)
-        repo = doc.get("nom_complet") or "source"
+        interne = _est_source_enrichie(doc)
+        repo = (doc.get("section_titre") or "Guide interne") if interne else (doc.get("nom_complet") or "source")
         cite = doc.get("citation_courte") or citation_courte(doc)
         conf = doc.get("score_confiance")
-        etoiles = doc.get("etoiles") or 0
         date = (doc.get("mis_a_jour_le") or "")[:10]
         conf_txt = f"{conf:.0%}" if isinstance(conf, (int, float)) else "—"
-        blob = doc.get("url_blob") or doc.get("url") or ""
+        blob = doc.get("url_blob") or ""
         commits = doc.get("url_commits") or ""
-        label = f"**[{i}] {repo}** `{cite}`"
+        label = f"**[{i}] {repo}**" if interne else f"**[{i}] {repo}** `{cite}`"
         meta_bits = [f"confiance {conf_txt}"]
-        if _est_source_enrichie(doc):
-            meta_bits.append("guide enrichi")
-        elif etoiles and int(etoiles) < 50_000:
-            meta_bits.append(f"★ {etoiles:,}")
+        if interne:
+            meta_bits.append("guide interne AssistDoc, hors GitHub")
+        else:
+            try:
+                etoiles = int(doc.get("etoiles") or 0)
+            except (TypeError, ValueError):
+                etoiles = 0
+            if etoiles:
+                meta_bits.append(f"★ {etoiles:,} (GitHub, {DATE_COLLECTE_GITHUB})")
         if date:
             meta_bits.append(date)
         liens = []
-        if blob and str(blob).startswith("http") and not _est_source_enrichie(doc):
+        if blob:
             liens.append(f"[fichier]({blob})")
-        if commits and not _est_source_enrichie(doc):
+        if commits:
             liens.append(f"[commits]({commits})")
         lien_txt = (" · " + " · ".join(liens)) if liens else ""
         st.markdown(f"{label}{lien_txt}  \n`{' · '.join(meta_bits)}`")
@@ -2419,7 +2418,7 @@ if st.session_state.en_cours and st.session_state.messages:
                 fichiers=fichiers_msg if a_un_fichier else None,
                 filtres=filtres if (utiliser_corpus or not a_un_fichier) else None,
                 top_k=st.session_state.top_k,
-                stream="auto",
+                stream=True,
                 mode_force=mode_force,
                 contexte_projet_existant=st.session_state.get("contexte_projet") or {},
                 utiliser_corpus=utiliser_corpus,
@@ -2453,9 +2452,10 @@ if st.session_state.en_cours and st.session_state.messages:
                 with gauche:
                     with st.chat_message("assistant", avatar="assistant"):
                         reponse_txt = st.write_stream(flux)
-                # Journal après stream (pas de boucle qualité en stream)
+                # Journal après stream : contrôle qualité a posteriori, sans régénération
                 try:
                     holder = resultat.usage_holder or {}
+                    meta = resultat.meta_journal or {}
                     st.session_state.orchestrateur.journal.enregistrer({
                         "question": q[:300],
                         "mode": resultat.mode,
@@ -2464,7 +2464,9 @@ if st.session_state.en_cours and st.session_state.messages:
                         "tokens": holder.get("tokens_utilises") or 0,
                         "latence": time.time() - t0,
                         "regen": 0,
-                        "web_utile": bool(resultat.ressources_web),
+                        "score_qualite": meta.get("score_qualite"),
+                        "qualite_valide": meta.get("qualite_valide"),
+                        "web_utile": bool(sources_web_reelles(resultat.ressources_web)),
                         "stream": True,
                     })
                 except Exception:
@@ -2493,7 +2495,7 @@ if st.session_state.en_cours and st.session_state.messages:
                 tokens = max(1, len(reponse_affichee) // 4)
 
             conf_rag = float(getattr(resultat, "score_rag", 0.0) or 0.0)
-            nb_web = len(resultat.ressources_web or [])
+            nb_web = len(sources_web_reelles(resultat.ressources_web))
 
             st.session_state.messages.append({
                 "role": "assistant", "content": reponse_affichee,

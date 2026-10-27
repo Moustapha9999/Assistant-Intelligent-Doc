@@ -54,3 +54,7 @@ Thumbs.db
 # Qdrant
 qdrant_data/
 qdrant_storage/
+
+# Déploiement (archive du corpus publiée en release, secrets Streamlit)
+deploy/
+.streamlit/secrets.toml

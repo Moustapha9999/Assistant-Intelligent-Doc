@@ -1,55 +1,35 @@
-# ── Environnement ──────────────────────────────────────
-python-dotenv>=1.0.0
+# Dépendances d'exécution de l'application Streamlit (déploiement cloud / Docker).
+# Outils de collecte, d'évaluation (RAGAS), d'API et de développement : requirements-dev.txt
 
-# ── Collecte des données ───────────────────────────────
-requests>=2.31.0
-PyGithub>=2.1.0
-beautifulsoup4>=4.12.0
-lxml>=4.9.0
+# torch CPU : sans cet index, Linux tire la version CUDA (~3 Go de bibliothèques NVIDIA)
+--extra-index-url https://download.pytorch.org/whl/cpu
 
-# ── Traitement des données ─────────────────────────────
-pandas>=2.0.0
-numpy>=1.24.0
-markdown>=3.5.0
-python-docx>=1.1.0
-pdfplumber>=0.10.0
-
-# ── Embeddings & Base vectorielle ─────────────────────
-sentence-transformers>=2.2.0
-qdrant-client>=1.7.0
-
-# ── LLM ────────────────────────────────────────────────
-groq>=0.4.0
-langchain>=0.1.0
-langchain-community>=0.0.20
-langchain-groq>=0.1.0
-langchain-huggingface>=0.0.1
-openai>=1.0.0
-
-# ── Retrieval hybride ──────────────────────────────────
-rank-bm25>=0.2.2
-
-# ── Évaluation RAGAS ──────────────────────────────────
-ragas>=0.1.0
-datasets>=2.14.0
-
-# ── Interface Web & API ────────────────────────────────
-streamlit>=1.28.0
-fastapi>=0.110.0
-uvicorn>=0.27.0
-pydantic>=2.0.0
+# ── Interface ──────────────────────────────────────────
+streamlit>=1.40.0
 fpdf2>=2.7.0
 
-# ── Utilitaires ───────────────────────────────────────
+# ── Configuration ──────────────────────────────────────
+python-dotenv>=1.0.0
 pyyaml>=6.0
-tqdm>=4.66.0
-python-dateutil>=2.8.0
+
+# ── Retrieval (dense + BM25 + rerank) ──────────────────
+torch>=2.2.0
+sentence-transformers>=3.0.0
+qdrant-client>=1.12.0
+numpy>=1.26.0
+scipy>=1.11.0
+
+# ── LLM / génération ───────────────────────────────────
+groq>=0.9.0
+openai>=1.0.0
+
+# ── Web, OAuth ─────────────────────────────────────────
+requests>=2.31.0
 httpx>=0.27.0
 PyJWT[crypto]>=2.8.0
-python-multipart>=0.0.9
-matplotlib>=3.8.0
 
-# ── Développement ─────────────────────────────────────
-pytest>=7.4.0
-black>=23.0.0
-flake8>=6.0.0
+# ── Fichiers envoyés, administration du corpus ─────────
+pdfplumber>=0.10.0
+python-docx>=1.1.0
+tqdm>=4.66.0
+PyGithub>=2.1.0

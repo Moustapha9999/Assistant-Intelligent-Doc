@@ -5,7 +5,7 @@
 ```bash
 python -m venv .venv
 .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
 Copiez `.env.example` vers `.env` puis renseignez au minimum `GROQ_API_KEY`. Ajoutez `GITHUB_TOKEN` pour collecter GitHub et, si nécessaire, `QDRANT_HOST`, `QDRANT_PORT` et `EMBEDDING_MODEL`.

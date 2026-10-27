@@ -15,11 +15,16 @@ __pycache__/
 
 # Variables d'environnement (sécurité)
 .env
+.streamlit/secrets.toml
 
-# Données volumineuses
-data/raw/
-data/processed/chunks/chunks_avec_embeddings.npz
+# Archive du corpus (publiée en release GitHub)
+deploy/
+
+# Données (montées en volume par docker-compose)
+data/
 qdrant_storage/
+qdrant_storage;C/
+.claude/
 cache_huggingface/
 models_cache/
 

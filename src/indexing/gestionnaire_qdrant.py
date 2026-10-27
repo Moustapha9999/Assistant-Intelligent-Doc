@@ -40,9 +40,9 @@ class GestionnaireQdrant:
         self.distance = Distance.COSINE if dist == "COSINE" else Distance.COSINE
         self.batch_size = int(self.cfg.get("indexing", {}).get("batch_size", 100))
 
-        print(f"[*] Connexion a Qdrant ({self.host}:{self.port})...")
+        print(f"[*] Connexion a Qdrant ({config.decrire_cible_qdrant()})...")
         try:
-            self.client = QdrantClient(host=self.host, port=self.port)
+            self.client: QdrantClient = config.creer_client_qdrant()
             self.client.get_collections()
             print("  Connexion réussie à Qdrant")
         except Exception as e:

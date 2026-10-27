@@ -150,9 +150,12 @@ def reecrire_requete(
     themes = _detecter_themes(q_low, table)
     base = _reformuler_base(originale)
 
+    # « python » seul est trop générique : ses expansions (typing, asyncio…) noient
+    # un thème plus précis comme docker ou flask
+    ignorer = {"python"} if len(themes) > 1 and "python" in themes else set()
     extras: List[str] = []
     for motif, exp in table.items():
-        if motif in q_low:
+        if motif in q_low and motif not in ignorer:
             extras.append(exp)
 
     # Renfort intentionnel

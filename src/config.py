@@ -53,6 +53,10 @@ MODELE_RERANKER = os.getenv(
     "cross-encoder/ms-marco-MiniLM-L-6-v2",
 )
 
+# Date de la sélection GitHub figée (data/raw/repos_selectionnes.yaml) :
+# les étoiles affichées proviennent de l'API GitHub à cette date.
+DATE_COLLECTE_GITHUB = os.getenv("DATE_COLLECTE_GITHUB", "2026-06-11")
+
 # --- Upload / sécurité --------------------------------------------------------
 UPLOAD_MAX_BYTES = int(os.getenv("UPLOAD_MAX_BYTES", str(10 * 1024 * 1024)))  # 10 Mo
 UPLOAD_EXTENSIONS_OK = {
@@ -94,6 +98,92 @@ def charger_qdrant_config() -> Dict[str, Any]:
         else:
             data.setdefault(cle, val)
     return data
+
+
+def parametres_qdrant() -> Dict[str, Any]:
+    """
+    QDRANT_URL (+ QDRANT_API_KEY) cible une instance distante (Qdrant Cloud) ;
+    sinon QDRANT_HOST / QDRANT_PORT (local ou service Docker).
+    """
+    timeout = int(os.getenv("QDRANT_TIMEOUT", "30"))
+    url = os.getenv("QDRANT_URL", "").strip()
+    if url:
+        return {"url": url, "api_key": os.getenv("QDRANT_API_KEY") or None, "timeout": timeout}
+    return {
+        "host": os.getenv("QDRANT_HOST", "localhost"),
+        "port": int(os.getenv("QDRANT_PORT", "6333")),
+        "timeout": timeout,
+    }
+
+
+def creer_client_qdrant():
+    from qdrant_client import QdrantClient
+
+    return QdrantClient(**parametres_qdrant())
+
+
+def decrire_cible_qdrant() -> str:
+    p = parametres_qdrant()
+    return p.get("url") or f"{p['host']}:{p['port']}"
+
+
+CORPUS_MEMBRES = (
+    "tous_chunks.json",
+    "bm25_cache/meta.json",
+    "bm25_cache/vocab.json",
+    "bm25_cache/idf.npy",
+    "bm25_cache/poids.npz",
+)
+
+
+def assurer_corpus(destination: Path = CHUNKS_DIR) -> bool:
+    """
+    Déploiement cloud : si tous_chunks.json est absent, télécharge l'archive CORPUS_URL
+    (tous_chunks.json + cache BM25, produite par scripts/preparer_corpus_deploiement.py),
+    vérifie CORPUS_SHA256 si défini, puis l'extrait dans `destination`.
+    """
+    if (destination / "tous_chunks.json").exists():
+        return True
+    url = os.getenv("CORPUS_URL", "").strip()
+    if not url:
+        return False
+
+    import hashlib
+    import tempfile
+    import zipfile
+
+    import requests
+
+    destination.mkdir(parents=True, exist_ok=True)
+    print(f"[*] Téléchargement du corpus : {url}")
+    h = hashlib.sha256()
+    with tempfile.NamedTemporaryFile(dir=destination, suffix=".zip", delete=False) as tmp:
+        chemin_zip = Path(tmp.name)
+        with requests.get(url, stream=True, timeout=60) as resp:
+            resp.raise_for_status()
+            for bloc in resp.iter_content(chunk_size=4 * 1024 * 1024):
+                tmp.write(bloc)
+                h.update(bloc)
+    try:
+        attendu = os.getenv("CORPUS_SHA256", "").strip().lower()
+        if attendu and h.hexdigest() != attendu:
+            raise ValueError("CORPUS_SHA256 ne correspond pas à l'archive téléchargée")
+        with zipfile.ZipFile(chemin_zip) as archive:
+            # tous_chunks.json en dernier : sa présence signifie « installation complète »
+            for membre in sorted(CORPUS_MEMBRES, key=lambda m: m == "tous_chunks.json"):
+                if membre not in archive.namelist():
+                    continue
+                cible = destination / membre
+                cible.parent.mkdir(parents=True, exist_ok=True)
+                partiel = cible.with_suffix(cible.suffix + ".part")
+                with archive.open(membre) as src, open(partiel, "wb") as dst:
+                    while bloc := src.read(4 * 1024 * 1024):
+                        dst.write(bloc)
+                os.replace(partiel, cible)
+    finally:
+        chemin_zip.unlink(missing_ok=True)
+    print("   [OK] Corpus installé")
+    return (destination / "tous_chunks.json").exists()
 
 
 def configurer_ssl():

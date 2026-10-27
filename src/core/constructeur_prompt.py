@@ -8,6 +8,7 @@ from typing import Dict, List, Optional
 from core.gestionnaire_modes import obtenir_mode
 from core.schemas import AnalyseQuestion, PlanReponse
 from retrieval.contexte import resume_contexte_global
+from web.ressources import sources_web_reelles
 
 
 class ConstructeurPrompt:
@@ -145,6 +146,7 @@ Instructions finales (passes réponse → critique → amélioration) :
         return "\n\n".join(blocs)
 
     def _formater_web(self, ressources: List[Dict]) -> str:
+        ressources = sources_web_reelles(ressources)
         if not ressources:
             return "Aucune ressource web."
         lignes = []

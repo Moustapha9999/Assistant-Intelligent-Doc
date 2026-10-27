@@ -20,7 +20,7 @@ def main() -> None:
 
     args = parser.parse_args()
     orchestrateur = OrchestrateurAssistant()
-    resultat = orchestrateur.repondre(args.question, top_k=args.top_k)
+    resultat = orchestrateur.repondre(args.question, top_k=args.top_k, stream=False)
     if args.commande == "search":
         for i, doc in enumerate(resultat.documents, 1):
             score = doc.get("score_confiance", doc.get("score_rerank", doc.get("score_dense", 0)))

@@ -57,4 +57,29 @@ if est_admin_session():
     )
 
 pg = st.navigation(_pages, position="sidebar")
+
+# Pop-ups (st.dialog et st.toast) centrés à l'écran
+st.markdown(
+    """
+<style>
+div[data-testid="stDialog"] div:has(> div[role="dialog"]) {
+    align-items: flex-start !important;
+    padding: 1rem 0 !important;
+}
+div[data-testid="stDialog"] div[role="dialog"] {
+    margin: auto !important;
+}
+div[data-testid="stToastContainer"] {
+    top: 50% !important;
+    bottom: auto !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translate(-50%, -50%) !important;
+    align-items: center !important;
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
 pg.run()

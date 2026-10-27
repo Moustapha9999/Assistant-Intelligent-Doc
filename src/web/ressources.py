@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Dict, List, Sequence
 from urllib.parse import quote_plus
 
+TYPE_LIEN_RECHERCHE = "lien_recherche"
+
 
 def dedupliquer_ressources(ressources: Sequence[Dict], max_items: int = 10) -> List[Dict]:
     vus = set()
@@ -29,14 +31,25 @@ def liens_youtube(question: str) -> List[Dict]:
             "url": f"https://www.youtube.com/results?search_query={mots}+tutoriel+français",
             "extrait": "Tutoriels vidéo sur le sujet",
             "source": "YouTube",
+            "type": TYPE_LIEN_RECHERCHE,
         },
         {
             "titre": f"🎥 YouTube (EN) : {question[:50]}",
             "url": f"https://www.youtube.com/results?search_query={mots}+tutorial",
             "extrait": "Video tutorials",
             "source": "YouTube",
+            "type": TYPE_LIEN_RECHERCHE,
         },
     ]
+
+
+def est_lien_recherche(ressource: Dict) -> bool:
+    """Lien de recherche généré localement : aucune page n'a été consultée, ce n'est pas une source."""
+    return ressource.get("type") == TYPE_LIEN_RECHERCHE
+
+
+def sources_web_reelles(ressources: List[Dict]) -> List[Dict]:
+    return [r for r in ressources or [] if not est_lien_recherche(r)]
 
 
 def formater_ressources(resultats: List[Dict]) -> str:

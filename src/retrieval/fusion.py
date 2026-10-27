@@ -11,11 +11,17 @@ import numpy as np
 from retrieval.contexte import THEME_MOTIFS, detecter_theme_doc
 
 
-def normaliser_confiance(score_rerank: float, score_dense: float = 0.0) -> float:
+def confiance_cross_encoder(score_ce: float) -> float:
+    """Sigmoïde du logit brut du cross-encoder (0 → 0.5)."""
     try:
-        s = 1.0 / (1.0 + np.exp(-float(score_rerank) / 3.0))
+        return float(1.0 / (1.0 + np.exp(-float(score_ce) / 3.0)))
     except Exception:
-        s = 0.0
+        return 0.0
+
+
+def normaliser_confiance(score_rerank: float, score_dense: float = 0.0) -> float:
+    """Confiance sans cross-encoder (ablations « sans rerank ») : mélange rang fusionné + dense."""
+    s = confiance_cross_encoder(score_rerank)
     d = max(0.0, min(1.0, float(score_dense or 0.0)))
     return float(0.7 * s + 0.3 * d)
 
@@ -76,8 +82,11 @@ def reranker_documents(cross_encoder, requete: str, documents: List[Dict], top_k
     paires = [(requete, doc["texte"][:512]) for doc in documents]
     scores = cross_encoder.predict(paires)
     for doc, score in zip(documents, scores):
+        # score_ce reste le jugement brut du modèle ; les boosts ne modifient que score_rerank
+        doc["score_ce"] = float(score)
         doc["score_rerank"] = float(score)
-        doc["score_confiance"] = normaliser_confiance(float(score), doc.get("score_dense", 0))
+        # Un score dense absent (doc trouvé seulement par BM25) n'est pas un score nul
+        doc["score_confiance"] = confiance_cross_encoder(float(score))
     return sorted(documents, key=lambda d: d.get("score_rerank", 0), reverse=True)[:top_k]
 
 
@@ -93,9 +102,6 @@ def appliquer_fraicheur(documents: List[Dict], freshness_weight: float) -> List[
         bonus = freshness_weight * max(0.0, 1.0 - age_jours / 730.0)
         doc["score_rerank"] = float(doc.get("score_rerank", 0)) + bonus
         doc["boost_fraicheur"] = bonus
-        doc["score_confiance"] = normaliser_confiance(
-            doc.get("score_rerank", 0), doc.get("score_dense", 0)
-        )
     return sorted(documents, key=lambda d: d.get("score_rerank", 0), reverse=True)
 
 
@@ -127,9 +133,6 @@ def annoter_themes(documents: List[Dict], themes_requete: Optional[Sequence[str]
         if bonus:
             doc["score_rerank"] = float(doc.get("score_rerank", 0)) + bonus
             doc["boost_theme"] = bonus
-            doc["score_confiance"] = normaliser_confiance(
-                doc.get("score_rerank", 0), doc.get("score_dense", 0)
-            )
         else:
             doc.setdefault("boost_theme", 0.0)
     return documents
@@ -154,8 +157,9 @@ def classer_par_theme(
     if not diversifier:
         return docs[:top_k] if top_k else docs
 
+    pertinents, faibles = separer_par_pertinence(docs)
     groupes: Dict[str, List[Dict]] = defaultdict(list)
-    for doc in docs:
+    for doc in pertinents:
         groupes[doc.get("theme") or "general"].append(doc)
 
     # Prioriser les thèmes demandés, puis les mieux scorés
@@ -184,7 +188,27 @@ def classer_par_theme(
                 break
             if files.get(theme):
                 out.append(files[theme].pop(0))
+    # Les documents faibles ne complètent la liste qu'après tous les pertinents
+    out.extend(faibles[: max(0, limite - len(out))])
     return out
+
+
+# Un doc entre dans la diversification s'il atteint cette fraction de la meilleure confiance
+RATIO_PERTINENCE_DIVERSIFICATION = 0.6
+
+
+def separer_par_pertinence(
+    docs: List[Dict], ratio: float = RATIO_PERTINENCE_DIVERSIFICATION
+) -> tuple[List[Dict], List[Dict]]:
+    """Sépare (pertinents, faibles) selon score_confiance, ordre conservé."""
+    confiances = [float(d.get("score_confiance") or 0) for d in docs]
+    meilleure = max(confiances, default=0.0)
+    if meilleure <= 0:
+        return list(docs), []
+    plancher = meilleure * ratio
+    pertinents = [d for d, c in zip(docs, confiances) if c >= plancher]
+    faibles = [d for d, c in zip(docs, confiances) if c < plancher]
+    return pertinents, faibles
 
 
 def themes_disponibles() -> List[str]:

@@ -352,10 +352,10 @@ def _css_modal_auth(*, page_gate: bool = False) -> None:
     st.markdown(
         f"""
         <style>
-        div[data-testid="stDialog"] {{
+        div[data-testid="stDialog"] div[role="dialog"] {{
             width: min(420px, 94vw) !important;
         }}
-        div[data-testid="stDialog"] > div {{
+        div[data-testid="stDialog"] div[role="dialog"] {{
             padding: 0.75rem 0.35rem 0.5rem 0.35rem !important;
             background: #2f2f2f !important;
         }}

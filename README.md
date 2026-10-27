@@ -56,7 +56,7 @@ Qdrant (collection "github_docs", distance COSINE, filtres payload)
 Recherche hybride :  Dense (Qdrant + seuil)  +  Sparse (BM25)  ──► Fusion RRF ──► Reranking ──► Fraîcheur
    │
    ▼
-Génération streaming (Groq · llama-3.3-70b-versatile) ──► Réponse FR + citations + confiance
+Génération (Groq · openai/gpt-oss-120b) ──► Réponse FR + citations à provenance vérifiée + confiance
    │
    ▼
 Évaluation RAGAS + Precision@k / MRR (ablations)
@@ -74,7 +74,7 @@ Interface Streamlit (+ API FastAPI / CLI) · historique SQLite
 | Embeddings | `paraphrase-multilingual-MiniLM-L12-v2` (384 dimensions) |
 | Base vectorielle | **Qdrant** (Docker) + index payload |
 | Recherche | Hybride — Dense + BM25, RRF, reranking, fraîcheur, filtres |
-| Génération | **Groq** — `llama-3.3-70b-versatile` (streaming) |
+| Génération | **Groq** — `openai/gpt-oss-120b` (boucle qualité ; streaming pour la conversation) |
 | Vision / images | Groq Vision + Pollinations (ou OpenAI Images) |
 | Évaluation | **RAGAS** + Precision@k / MRR |
 | Interface | **Streamlit** + API FastAPI + CLI |
@@ -89,7 +89,8 @@ Assistant-Intelligent-Doc/
 ├── .github/workflows/ci.yml     # CI GitHub Actions
 ├── .streamlit/config.toml       # Thème Streamlit
 ├── .env.example                 # Variables d'environnement (modèle)
-├── requirements.txt
+├── requirements.txt             # Dépendances d'exécution (app)
+├── requirements-dev.txt         # + collecte, évaluation, API, tests
 ├── assets/                      # Logo AssistDoc
 ├── configs/
 │   ├── repos_github.yaml        # Critères de sélection + repos forcés
@@ -133,7 +134,8 @@ python -m venv .venv
 .venv\Scripts\activate
 # Linux / macOS
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # app + collecte + évaluation + API + tests
+# (requirements.txt seul = dépendances d'exécution de l'app, utilisé par Docker et Streamlit Cloud)
 cp .env.example .env   # puis renseigner GROQ_API_KEY, etc.
 ```
 
@@ -142,9 +144,11 @@ Variables utiles dans `.env` :
 ```ini
 GITHUB_TOKEN=ghp_xxx              # pour la collecte
 GROQ_API_KEY=gsk_xxx             # pour la génération
-LLM_MODEL=llama-3.3-70b-versatile
-LLM_TEMPERATURE=0.1
-QDRANT_URL=http://localhost:6333
+LLM_MODEL=openai/gpt-oss-120b
+LLM_TEMPERATURE=0.3
+QDRANT_URL=http://localhost:6333  # Qdrant Cloud : URL https du cluster
+# QDRANT_API_KEY=                 # requis pour Qdrant Cloud
+QDRANT_TIMEOUT=30
 # IMAGE_GEN_PROVIDER=auto        # pollinations | openai | off
 # DISABLE_SSL_VERIFY=1           # dépannage réseau uniquement (proxy d'entreprise)
 ```
@@ -194,8 +198,19 @@ bash scripts/run_ci.sh
 ### 6. Évaluer le système (optionnel)
 
 ```bash
+python src/evaluation/3_evaluer_retrieval.py --sortie logs/eval.json   # P@k, MRR, métriques strictes, contexte LLM
+python scripts/tracer_pipeline.py                                      # trace étape par étape (sans LLM)
+python scripts/mesurer_latence.py --n 10                               # latence froid/chaud, p50/p95, TTFT
 python src/evaluation/evaluateur_ragas.py
 ```
+
+### Provenance des citations
+
+Une source n'est présentée comme dépôt GitHub que si `nom_complet` (`owner/repo`) et `url`
+(`https://github.com/owner/repo`) concordent. Les guides rédigés pour le projet
+(`enrichissement/`, `knowledge/`) sont affichés comme « guides internes », sans lien ni étoiles.
+Les étoiles proviennent de l'API GitHub à la date `DATE_COLLECTE_GITHUB`.
+`scripts/corriger_provenance_corpus.py` corrige les métadonnées du corpus existant.
 
 ---
 
@@ -222,8 +237,21 @@ et les critères de corpus dans [configs/repos_github.yaml](configs/repos_github
 
 ---
 
+## Déploiement (Streamlit Community Cloud + Qdrant Cloud)
+
+Guide pas à pas : [docs/deploiement.md](docs/deploiement.md).
+
+```bash
+python scripts/preparer_corpus_deploiement.py      # archive corpus + cache BM25 (release GitHub)
+python scripts/migrer_vers_qdrant_cloud.py --dry-run
+python scripts/migrer_vers_qdrant_cloud.py         # copie la collection locale vers Qdrant Cloud
+```
+
+---
+
 ## Documentation complémentaire
 
+- [docs/deploiement.md](docs/deploiement.md)
 - [docs/architecture.md](docs/architecture.md)
 - [docs/api.md](docs/api.md)
 - [docs/guide_utilisation.md](docs/guide_utilisation.md)

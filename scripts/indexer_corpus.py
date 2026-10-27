@@ -8,6 +8,7 @@ from pathlib import Path
 # Ajouter le dossier src au path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
+import config
 from indexing.generateur_embeddings import GenerateurEmbeddings
 from indexing.gestionnaire_qdrant import GestionnaireQdrant
 
@@ -50,7 +51,7 @@ def main():
     print(f"   - {len(chunks)} chunks indexés")
     print(f"   - Dimension embeddings: {embeddings.shape[1]}")
     print(f"   - Collection Qdrant: {gestionnaire.collection_name}")
-    print(f"   - Host Qdrant: {gestionnaire.host}:{gestionnaire.port}")
+    print(f"   - Qdrant: {config.decrire_cible_qdrant()}")
 
 
 if __name__ == "__main__":

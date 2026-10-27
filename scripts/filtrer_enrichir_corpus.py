@@ -101,11 +101,13 @@ def chunk_enrichi(
         "type_chunk": "markdown",
         "nom_complet": repo,
         "langage": langage,
-        "etoiles": 0,
-        "url": f"https://github.com/{repo}" if "/" in repo else "",
+        # Guide rédigé pour le projet : ni étoiles ni URL GitHub
+        "etoiles": None,
+        "url": "",
         "type_doc": "documentation",
         "chemin_fichier": chemin,
         "source_enrichissement": True,
+        "provenance": "guide_interne",
     }
 
 

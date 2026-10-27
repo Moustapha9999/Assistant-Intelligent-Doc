@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from web import WebSearcher
+from web.ressources import sources_web_reelles
 
 from core.classificateur import ClassificateurAssistant
 from core.constructeur_prompt import ConstructeurPrompt
@@ -36,8 +37,9 @@ _MODES_QUALITE = {
     "technique", "debug", "projet", "comparaison", "code",
     "cours", "expert", "documentation", "analyse", "perplexity",
 }
-# Sous ce seuil, on ignore les docs (pas de fausses citations)
-_SEUIL_CITATION_MIN = 0.45
+# Sous ce seuil, on ignore les docs (pas de fausses citations).
+# Échelle : sigmoïde(logit cross-encoder / 3) ; calibré par scripts/calibrer_seuil_citation.py
+_SEUIL_CITATION_MIN = 0.40
 
 
 class OrchestrateurAssistant:
@@ -212,7 +214,7 @@ class OrchestrateurAssistant:
             analyse.mode not in {"projet", "code", "debug", "cours", "expert"}
             and faire_web
             and (not documents or score_rag < 0.25)
-            and len(ressources_web) >= 3
+            and len(sources_web_reelles(ressources_web)) >= 3
             and analyse.mode in {"explication", "perplexity", "technique"}
         ):
             if analyse.mode == "explication" or analyse.mode == "perplexity":
@@ -254,8 +256,20 @@ class OrchestrateurAssistant:
             usage_holder: Dict = {"tokens_utilises": 0}
 
             def _flux():
+                morceaux: List[str] = []
                 for delta in self.llm_client.stream(messages, usage_holder):
+                    morceaux.append(delta or "")
                     yield delta
+                # Contrôle qualité a posteriori (journalisé, sans régénération)
+                texte = "".join(morceaux)
+                try:
+                    rapport = self.controleur_qualite.verifier(texte, analyse, plan, question=question)
+                except Exception:
+                    rapport = None
+                resultat.reponse_seule = texte.strip()
+                resultat.rapport_qualite = rapport
+                resultat.meta_journal["score_qualite"] = getattr(rapport, "score", None)
+                resultat.meta_journal["qualite_valide"] = getattr(rapport, "valide", None)
 
             resultat = ResultatOrchestration(
                 analyse=analyse,
@@ -274,7 +288,7 @@ class OrchestrateurAssistant:
                 score_rag=score_rag,
                 meta_journal={
                     "strategie_sources": analyse.strategie_sources,
-                    "web_utile": bool(ressources_web),
+                    "web_utile": bool(sources_web_reelles(ressources_web)),
                 },
             )
             return resultat
@@ -360,7 +374,7 @@ class OrchestrateurAssistant:
             score_rag=score_rag,
             meta_journal={
                 "strategie_sources": analyse.strategie_sources,
-                "web_utile": bool(ressources_web),
+                "web_utile": bool(sources_web_reelles(ressources_web)),
                 "regen": tentatives,
                 "score_qualite": getattr(rapport, "score", None),
             },

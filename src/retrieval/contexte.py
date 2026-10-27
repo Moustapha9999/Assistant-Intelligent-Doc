@@ -197,6 +197,9 @@ def compresser_documents(
 
 def _diversifier_par_theme(documents: List[Dict], max_docs: int) -> List[Dict]:
     """Round-robin inter-thèmes pour éviter 5 chunks du même repo/sujet."""
+    from retrieval.fusion import separer_par_pertinence
+
+    documents, faibles = separer_par_pertinence(documents)
     groupes = grouper_par_theme(documents)
     # Thèmes triés par meilleur score interne
     def best_score(docs: List[Dict]) -> float:
@@ -214,6 +217,7 @@ def _diversifier_par_theme(documents: List[Dict], max_docs: int) -> List[Dict]:
                 break
             if files[theme]:
                 out.append(files[theme].pop(0))
+    out.extend(faibles[: max(0, max_docs - len(out))])
     return out
 
 

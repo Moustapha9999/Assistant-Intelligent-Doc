@@ -70,6 +70,7 @@ TERMES_FORCES = {
     "react": ["useState", "useEffect"],
     "jwt": ["jwt.encode", "jwt.decode", "PyJWT"],
     "docker": ["Dockerfile", "docker compose"],
+    "multi-stage": ["multi-stage", "COPY --from="],
 }
 
 
@@ -92,9 +93,11 @@ class RetrievalHybride:
         self.abstention_threshold = float(search_cfg.get("abstention_threshold", 0.12))
         self.freshness_weight = float(search_cfg.get("freshness_weight", 0.08))
         self.default_limit = int(search_cfg.get("default_limit", 5))
+        # « originale » : question naturelle (embeddings multilingues) ;
+        # « reecrite » : requête enrichie de mots-clés (adaptée à BM25)
+        self.requete_dense = str(search_cfg.get("requete_dense", "originale"))
+        self.requete_rerank = str(search_cfg.get("requete_rerank", "reecrite"))
 
-        self.qdrant_host = os.getenv("QDRANT_HOST", "localhost")
-        self.qdrant_port = int(os.getenv("QDRANT_PORT", 6333))
         self.collection_name = os.getenv(
             "QDRANT_COLLECTION_NAME",
             self.cfg.get("collection", {}).get("name", "github_docs"),
@@ -106,8 +109,8 @@ class RetrievalHybride:
         config.configurer_ssl()
 
         print("[*] Connexion a Qdrant...")
-        self.qdrant = QdrantClient(host=self.qdrant_host, port=self.qdrant_port)
-        print(f"   [OK] Qdrant connecte ({self.qdrant_host}:{self.qdrant_port})")
+        self.qdrant: QdrantClient = config.creer_client_qdrant()
+        print(f"   [OK] Qdrant connecte ({config.decrire_cible_qdrant()})")
 
         print(f"[*] Chargement embeddings ({self.embedding_model})...")
         Path(self.cache_folder).mkdir(parents=True, exist_ok=True)
@@ -123,6 +126,7 @@ class RetrievalHybride:
         print(f"   [OK] BM25 ({len(self.chunks_bruts)} docs)")
 
     def _construire_index_bm25(self):
+        config.assurer_corpus(Path(self.chunks_file).parent)
         return construire_index_bm25(self.chunks_file)
 
     def _construire_filtre_qdrant(self, filtres: Optional[Dict]):
@@ -213,6 +217,7 @@ class RetrievalHybride:
             chunks_bruts=self.chunks_bruts,
             termes_forces=TERMES_FORCES,
             max_inject=max_inject,
+            repos_preferes=REPO_PREFERENCE,
         )
 
     def doit_sabstenir(self, documents: List[Dict]) -> bool:
@@ -238,10 +243,13 @@ class RetrievalHybride:
             print(f"   ↔ Rewrite ({info_requete.intention}) : « {info_requete.reecrite[:120]} »")
         top_k_final = top_k_final or self.default_limit
 
+        requete_dense = requete if self.requete_dense == "originale" else requete_recherche
+        requete_ce = requete if self.requete_rerank == "originale" else requete_recherche
+
         docs_dense, docs_bm25 = [], []
         if mode in ("dense", "hybride"):
             print("   → Dense (Qdrant)...")
-            docs_dense = self._recherche_dense(requete_recherche, top_k=top_k_retrieval, filtres=filtres)
+            docs_dense = self._recherche_dense(requete_dense, top_k=top_k_retrieval, filtres=filtres)
             print(f"      {len(docs_dense)} résultats")
         if mode in ("bm25", "hybride"):
             print("   → BM25...")
@@ -264,7 +272,7 @@ class RetrievalHybride:
 
         if avec_rerank:
             print("   → Reranking...")
-            candidats = self._reranker(requete_recherche, docs_fusionnes, top_k=max(top_k_final * 4, 20))
+            candidats = self._reranker(requete_ce, docs_fusionnes, top_k=max(top_k_final * 4, 20))
             candidats = self._booster_lexical(requete, candidats)
             candidats = self._appliquer_fraicheur(candidats)
         else:

@@ -18,11 +18,12 @@ from generation.generateur_reponse import (
 )
 
 
+# Ordre = priorité : un domaine précis (docker) passe avant le langage générique (python)
 DOMAINES = {
     "fastapi": ("fastapi", "pydantic", "uvicorn", "httpexception"),
     "flask": ("flask", "jinja", "werkzeug", "jsonify"),
-    "python": ("python", "py", "pathlib", "pytest"),
     "docker": ("docker", "dockerfile", "compose", "container"),
+    "python": ("python", "py", "pathlib", "pytest"),
     "sql": ("sql", "postgres", "mysql", "sqlite", "query", "requête"),
     "react": ("react", "jsx", "useeffect", "usestate"),
     "architecture": ("architecture", "microservice", "monolithe", "design pattern"),

@@ -13,6 +13,11 @@ def web_timeout() -> int:
     return int(os.getenv("WEB_TIMEOUT", "5"))
 
 
+def tavily_api_key() -> str:
+    return os.getenv("TAVILY_API_KEY", "").strip()
+
+
 USER_AGENT = "Mozilla/5.0 AssistDoc/1.0"
 DDG_API = "https://api.duckduckgo.com/"
 DDG_HTML = "https://html.duckduckgo.com/html/"
+TAVILY_SEARCH = "https://api.tavily.com/search"

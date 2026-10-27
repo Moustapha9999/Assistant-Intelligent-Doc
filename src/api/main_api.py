@@ -125,6 +125,7 @@ def ask(
             filtres=requete.filtres,
             top_k=requete.top_k,
             utiliser_corpus=requete.utiliser_corpus,
+            stream=False,
         )
         return {
             "answer": resultat.reponse,
