@@ -8,6 +8,7 @@ Auth AssistDoc — style ChatGPT :
 
 from __future__ import annotations
 
+import html
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -38,6 +39,7 @@ from app.auth_google import (
 )
 from app import identite as _identite
 from app.quotas import quota_pour
+from app.ui_composants import afficher_erreur, journal, notifier
 
 users_db = _identite.users_db
 _users_db = users_db
@@ -97,7 +99,7 @@ def exiger_admin(*, autoriser_login: bool = True) -> bool:
     if est_admin_session():
         return True
 
-    st.error("⛔ Accès refusé — réservé aux administrateurs.")
+    afficher_erreur("Accès refusé : cette page est réservée aux administrateurs.")
     if est_compte_connecte():
         st.info(
             f"Compte actuel : **{utilisateur_courant()}** "
@@ -167,6 +169,11 @@ def _redirect_oauth() -> str:
     )
 
 
+def _echec_oauth(fournisseur: str, detail: str) -> None:
+    journal.warning("Échec OAuth %s : %s", fournisseur, detail)
+    afficher_erreur(f"La connexion avec {fournisseur} a échoué.", conseil="Recommencez la connexion.")
+
+
 def _traiter_callback_oauth() -> None:
     """Traite le retour OAuth Google ou GitHub (?code=&state=)."""
     try:
@@ -182,7 +189,7 @@ def _traiter_callback_oauth() -> None:
             del st.query_params["apple_error"]
         except Exception:
             pass
-        st.error("Connexion Apple interrompue.")
+        afficher_erreur("Connexion Apple interrompue.", conseil="Recommencez la connexion.")
         return
     if not code:
         return
@@ -213,13 +220,13 @@ def _traiter_callback_oauth() -> None:
         if not apple_oauth_configure():
             return
         if not _etat_oauth_valide(state_s, "apple"):
-            st.error("État OAuth Apple invalide ou expiré. Recommencez la connexion.")
+            _echec_oauth("Apple", "état invalide ou expiré")
             return
         profile, err = echanger_code_apple(str(code))
         st.session_state.pop("apple_auth_url", None)
         st.session_state.pop("oauth_provider", None)
         if not profile:
-            st.error(err)
+            _echec_oauth("Apple", err)
             return
         user = _users_db().upsert_apple(
             profile["apple_id"],
@@ -227,7 +234,7 @@ def _traiter_callback_oauth() -> None:
             display_name=str(apple_name or ""),
         )
         _appliquer_user(user)
-        st.toast("Connecté avec Apple")
+        notifier("Connecté avec Apple.")
         st.rerun()
         return
 
@@ -235,13 +242,13 @@ def _traiter_callback_oauth() -> None:
         if not google_oauth_configure():
             return
         if not _etat_oauth_valide(state_s, "google"):
-            st.error("État OAuth Google invalide ou expiré. Recommencez la connexion.")
+            _echec_oauth("Google", "état invalide ou expiré")
             return
         profile, err = echanger_code_google(str(code), redirect)
         st.session_state.pop("google_auth_url", None)
         st.session_state.pop("oauth_provider", None)
         if not profile:
-            st.error(err)
+            _echec_oauth("Google", err)
             return
         user = _users_db().upsert_google(
             profile["google_id"],
@@ -249,7 +256,7 @@ def _traiter_callback_oauth() -> None:
             display_name=profile.get("name") or "",
         )
         _appliquer_user(user)
-        st.toast("Connecté avec Google")
+        notifier("Connecté avec Google.")
         st.rerun()
         return
 
@@ -257,13 +264,13 @@ def _traiter_callback_oauth() -> None:
         if not github_oauth_configure():
             return
         if not _etat_oauth_valide(state_s, "github"):
-            st.error("État OAuth GitHub invalide ou expiré. Recommencez la connexion.")
+            _echec_oauth("GitHub", "état invalide ou expiré")
             return
         profile, err = echanger_code_github(str(code), redirect)
         st.session_state.pop("github_auth_url", None)
         st.session_state.pop("oauth_provider", None)
         if not profile:
-            st.error(err)
+            _echec_oauth("GitHub", err)
             return
         user = _users_db().upsert_github(
             profile["github_id"],
@@ -271,7 +278,7 @@ def _traiter_callback_oauth() -> None:
             email=profile.get("email"),
         )
         _appliquer_user(user)
-        st.toast("Connecté avec GitHub — quota élevé activé")
+        notifier("Connecté avec GitHub.")
         st.rerun()
         return
 
@@ -307,129 +314,45 @@ def _lancer_apple() -> None:
 
 
 def _css_modal_auth(*, page_gate: bool = False) -> None:
-    """Styles du modal auth — alignés sur ChatGPT."""
-    page = ""
-    if page_gate:
-        page = """
-        section.main .stButton > button {
-            border-radius: 999px !important;
-            min-height: 48px !important;
-            font-weight: 500 !important;
-            font-size: 0.95rem !important;
-            border: 1px solid rgba(255,255,255,0.55) !important;
-            background: transparent !important;
-            color: #fff !important;
-        }
-        section.main .stButton > button:hover {
-            background: rgba(255,255,255,0.06) !important;
-            border-color: #fff !important;
-        }
-        section.main .stButton > button[kind="primary"] {
-            background: #ffffff !important;
-            color: #111111 !important;
-            border: none !important;
-            font-weight: 600 !important;
-        }
-        section.main .stButton > button[kind="primary"]:hover {
-            background: #e8e8e8 !important;
-            color: #111 !important;
-        }
-        section.main .stButton > button:disabled {
-            opacity: 0.55 !important;
-            border-color: rgba(255,255,255,0.35) !important;
-        }
-        section.main div[data-baseweb="input"] > div {
-            background: #000 !important;
-            border-radius: 999px !important;
-            border: 1px solid rgba(255,255,255,0.45) !important;
-            min-height: 48px !important;
-        }
-        section.main input { color: #fff !important; }
-        """
+    """Textes de la fenêtre de connexion ; boutons, champs et fenêtre suivent le thème commun."""
     st.markdown(
-        f"""
+        """
         <style>
-        div[data-testid="stDialog"] div[role="dialog"] {{
-            width: min(420px, 94vw) !important;
-        }}
-        div[data-testid="stDialog"] div[role="dialog"] {{
-            padding: 0.75rem 0.35rem 0.5rem 0.35rem !important;
-            background: #2f2f2f !important;
-        }}
-        div[data-testid="stDialog"] h2 {{
-            text-align: center !important;
-            font-size: 1.35rem !important;
-            font-weight: 600 !important;
-            letter-spacing: -0.02em;
-            margin: 0.15rem 0 0.55rem 0 !important;
-            color: #fff !important;
-        }}
-        .auth-card-title {{
+        .auth-card-title {
             text-align: center;
-            font-size: 1.35rem;
+            font-size: var(--ui-fs-title);
             font-weight: 600;
-            color: #fff;
-            margin: 0 0 0.65rem 0;
-            letter-spacing: -0.02em;
-        }}
-        .auth-sub {{
+            color: var(--ui-text);
+            margin: 0 0 var(--ui-space-3) 0;
+        }
+        .auth-sub {
             text-align: center;
-            color: #ececec;
-            font-size: 0.92rem;
-            line-height: 1.45;
-            margin: 0 auto 1.25rem auto;
-            max-width: 340px;
-            font-weight: 400;
-        }}
-        .auth-ou-wrap {{
+            color: var(--ui-text-muted);
+            font-size: var(--ui-fs);
+            line-height: 1.5;
+            margin: 0 auto var(--ui-space-4) auto;
+            max-width: 360px;
+        }
+        .auth-email {
+            text-align: center;
+            color: var(--ui-text);
+            margin: 0 0 var(--ui-space-2) 0;
+            overflow-wrap: anywhere;
+        }
+        .auth-ou-wrap {
             display: flex;
             align-items: center;
-            gap: 14px;
-            margin: 1.05rem 0 1.05rem 0;
-            color: #cfcfcf;
-            font-size: 0.88rem;
-        }}
-        .auth-ou-wrap::before, .auth-ou-wrap::after {{
+            gap: var(--ui-space-3);
+            margin: var(--ui-space-4) 0;
+            color: var(--ui-text-muted);
+            font-size: var(--ui-fs-sm);
+        }
+        .auth-ou-wrap::before, .auth-ou-wrap::after {
             content: "";
             flex: 1;
             height: 1px;
-            background: rgba(255,255,255,0.18);
-        }}
-        div[data-testid="stDialog"] .stButton > button {{
-            border-radius: 999px !important;
-            min-height: 48px !important;
-            font-weight: 500 !important;
-            font-size: 0.95rem !important;
-            border: 1px solid rgba(255,255,255,0.55) !important;
-            background: transparent !important;
-            color: #fff !important;
-        }}
-        div[data-testid="stDialog"] .stButton > button:hover {{
-            background: rgba(255,255,255,0.06) !important;
-            border-color: #fff !important;
-        }}
-        div[data-testid="stDialog"] .stButton > button[kind="primary"] {{
-            background: #ffffff !important;
-            color: #111111 !important;
-            border: none !important;
-            font-weight: 600 !important;
-        }}
-        div[data-testid="stDialog"] .stButton > button[kind="primary"]:hover {{
-            background: #e8e8e8 !important;
-            color: #111 !important;
-        }}
-        div[data-testid="stDialog"] .stButton > button:disabled {{
-            opacity: 0.55 !important;
-            border-color: rgba(255,255,255,0.35) !important;
-        }}
-        div[data-testid="stDialog"] div[data-baseweb="input"] > div {{
-            background: #000 !important;
-            border-radius: 999px !important;
-            border: 1px solid rgba(255,255,255,0.45) !important;
-            min-height: 48px !important;
-        }}
-        div[data-testid="stDialog"] input {{ color: #fff !important; }}
-        {page}
+            background: var(--ui-border);
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -548,7 +471,7 @@ def _contenu_modal_auth(
         ):
             email = (email or "").strip().lower()
             if "@" not in email:
-                st.error("Entrez une adresse e-mail valide.")
+                afficher_erreur("Entrez une adresse e-mail valide.")
             else:
                 st.session_state.auth_pending_email = email
                 st.session_state.auth_email_step = "password"
@@ -556,8 +479,7 @@ def _contenu_modal_auth(
     else:
         email = st.session_state.get("auth_pending_email", "")
         st.markdown(
-            f"<p style='text-align:center;color:#ddd;margin:0 0 0.5rem 0'>"
-            f"<b>{email}</b></p>",
+            f'<p class="auth-email"><b>{html.escape(email)}</b></p>',
             unsafe_allow_html=True,
         )
         if st.button("← Changer d'e-mail", key=f"{key_prefix}_back_email"):
@@ -577,14 +499,14 @@ def _contenu_modal_auth(
                 user, msg = _users_db().connecter_email(email, password)
                 if user:
                     _appliquer_user(user)
-                    st.toast(
-                        "Connecté en administrateur"
+                    notifier(
+                        "Connecté en administrateur."
                         if user.get("tier") == "admin"
-                        else "Connecté — quota email activé"
+                        else "Vous êtes connecté."
                     )
                     st.rerun()
                 else:
-                    st.error(msg)
+                    afficher_erreur(msg)
         with c2:
             if st.button(
                 "Créer un compte",
@@ -595,10 +517,10 @@ def _contenu_modal_auth(
                 user, msg = _users_db().inscrire_email(email, password)
                 if user:
                     _appliquer_user(user)
-                    st.toast("Compte créé — bienvenue !")
+                    notifier("Compte créé. Bienvenue !")
                     st.rerun()
                 else:
-                    st.error(msg)
+                    afficher_erreur(msg)
 
 
 @st.dialog("Connectez-vous ou inscrivez-vous")
@@ -631,49 +553,17 @@ def barre_auth_top() -> None:
         with right:
             if st.button("Déconnexion", key="top_logout", use_container_width=True):
                 deconnecter()
+                notifier("Vous êtes déconnecté.", "info")
                 st.rerun()
         return
 
-    # Même largeur / hauteur forcée sur les 2 boutons (classes st-key-*)
     st.markdown(
         """
         <style>
-        div.st-key-top_login,
-        div.st-key-top_signup {
-            width: 124px !important;
-        }
-        div.st-key-top_login button,
-        div.st-key-top_signup button {
-            width: 124px !important;
-            min-width: 124px !important;
-            max-width: 124px !important;
-            height: 34px !important;
-            min-height: 34px !important;
-            max-height: 34px !important;
-            padding: 0 10px !important;
-            font-size: 13px !important;
-            font-weight: 500 !important;
+        div.st-key-top_login, div.st-key-top_signup { min-width: 124px; }
+        div.st-key-top_login button, div.st-key-top_signup button {
+            min-height: var(--ui-btn-h-sm) !important;
             white-space: nowrap !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            box-sizing: border-box !important;
-            border-radius: 8px !important;
-        }
-        /* Inscription = même boîte, fond bleu */
-        div.st-key-top_signup button {
-            background: #3d8bfd !important;
-            color: #fff !important;
-            border: none !important;
-        }
-        div.st-key-top_signup button:hover {
-            background: #2f7ae5 !important;
-            color: #fff !important;
-        }
-        div.st-key-top_login button {
-            background: rgba(255,255,255,0.06) !important;
-            color: #ececec !important;
-            border: 1px solid rgba(255,255,255,0.18) !important;
         }
         </style>
         """,
@@ -686,8 +576,7 @@ def barre_auth_top() -> None:
             st.session_state.auth_email_step = "email"
             st.rerun()
     with b2:
-        # secondary volontairement : même chrome que Se connecter, bleu via CSS
-        if st.button("Inscription", key="top_signup", use_container_width=True):
+        if st.button("Inscription", key="top_signup", type="primary", use_container_width=True):
             st.session_state.show_auth_dialog = True
             st.session_state.auth_email_step = "email"
             st.rerun()
@@ -729,6 +618,7 @@ def barre_auth_sidebar_bas() -> None:
     else:
         if st.button("Se déconnecter", key="btn_logout", use_container_width=True):
             deconnecter()
+            notifier("Vous êtes déconnecté.", "info")
             st.rerun()
 
 

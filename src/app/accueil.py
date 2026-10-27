@@ -26,6 +26,19 @@ from app.gestionnaire_fichiers import traiter_fichier, formater_pour_prompt, tra
 from app.historique_sqlite import HistoriqueSQLite
 from app.favoris_sqlite import FavorisSQLite
 from app.identite import identite_session
+from app.ui_composants import (
+    afficher_avertissement,
+    afficher_erreur,
+    annuler_confirmation,
+    confirmation_en_attente,
+    demander_confirmation,
+    erreur_confirmation,
+    executer_confirmation,
+    message_erreur,
+    notifier,
+    pied_dialogue,
+    texte_dialogue,
+)
 from securite.acces import VueProprietaire
 from app.auth_basique import (
     afficher_dialog_auth_si_besoin,
@@ -110,8 +123,6 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
     color: var(--text);
     font-family: 'Inter', system-ui, sans-serif;
 }
-#MainMenu, footer, header { display: none !important; }
-[data-testid="stToolbar"] { display: none; }
 .block-container { padding: 0 !important; max-width: 100% !important; }
 [data-testid="stAppViewContainer"] > .main { background: var(--bg) !important; }
 /* Évite le gros vide Streamlit au-dessus du contenu */
@@ -324,7 +335,7 @@ section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
 .thinking-chip:nth-child(3) { opacity: 0.28; filter: blur(2.5px); flex-basis: 160px; }
 .thinking-chip:nth-child(4) { opacity: 0.22; filter: blur(3px); }
 /* Composer flouté tant que la scène de réflexion est visible */
-section.main:has(.thinking-stage) .stHorizontalBlock:has(.stTextInput),
+section.main:has(.thinking-stage) .stHorizontalBlock:has(div[class*="st-key-inp_"]),
 section.main:has(.thinking-stage) .composer-hint,
 section.main:has(.thinking-stage) .upload-preview,
 section.main:has(.thinking-stage) .web-on {
@@ -449,8 +460,8 @@ section.main:has(.thinking-stage) .web-on {
     text-align: center; margin-top: 12px; letter-spacing: 0.1px;
 }
 
-/* Composer = dernière rangée horizontale du chat */
-section.main .block-container .stHorizontalBlock:has(.stTextInput) {
+/* Composer = rangée qui contient le champ de saisie (clé inp_…) */
+section.main .block-container .stHorizontalBlock:has(div[class*="st-key-inp_"]) {
     background: var(--bg-input) !important;
     border: 1px solid rgba(255,255,255,0.1) !important;
     border-radius: 22px !important;
@@ -462,10 +473,10 @@ section.main .block-container .stHorizontalBlock:has(.stTextInput) {
     gap: 6px !important;
 }
 
-.stTextInput { margin: 0 !important; }
-.stTextInput > div { background: transparent !important; border: none !important; }
-.stTextInput > div > div { background: transparent !important; border: none !important; }
-.stTextInput > div > div > input {
+div[class*="st-key-inp_"] .stTextInput { margin: 0 !important; }
+div[class*="st-key-inp_"] [data-baseweb="input"],
+div[class*="st-key-inp_"] [data-baseweb="input"] > div { background: transparent !important; border: none !important; }
+div[class*="st-key-inp_"] input {
     background: transparent !important;
     border: none !important;
     border-radius: 0 !important;
@@ -476,14 +487,13 @@ section.main .block-container .stHorizontalBlock:has(.stTextInput) {
     box-shadow: none !important;
     height: 44px !important;
 }
-.stTextInput > div > div > input:focus {
+div[class*="st-key-inp_"] input:focus {
     border: none !important; box-shadow: none !important;
 }
-.stTextInput > div > div > input::placeholder { color: var(--text-dim) !important; }
-.stTextInput label { display: none !important; }
+div[class*="st-key-inp_"] input::placeholder { color: var(--text-dim) !important; }
 
 /* Bouton envoyer (rond) */
-section.main .stHorizontalBlock:has(.stTextInput) .stButton > button {
+div.st-key-btn_send button {
     background: var(--text) !important;
     color: #1a1918 !important;
     border: none !important;
@@ -494,12 +504,13 @@ section.main .stHorizontalBlock:has(.stTextInput) .stButton > button {
     min-width: 40px !important; max-width: 40px !important;
     padding: 0 !important; cursor: pointer !important;
 }
-section.main .stHorizontalBlock:has(.stTextInput) .stButton > button:hover {
+div.st-key-btn_send button:hover {
     background: #fff !important; transform: none !important; opacity: 0.92;
 }
+div.st-key-btn_send button:disabled { background: var(--text-dim) !important; }
 
-button[kind="secondary"],
-.stButton > button[data-testid="baseButton-secondary"] {
+/* Suggestions de l'écran d'accueil (clés sug_…) */
+div[class*="st-key-sug_"] button {
     background: rgba(255,255,255,0.04) !important;
     color: var(--text-muted) !important;
     border: 1px solid rgba(255,255,255,0.08) !important;
@@ -509,49 +520,45 @@ button[kind="secondary"],
     height: auto !important; min-height: 48px !important; width: 100% !important;
     text-align: left !important; justify-content: flex-start !important;
 }
-button[kind="secondary"]:hover,
-.stButton > button[data-testid="baseButton-secondary"]:hover {
+div[class*="st-key-sug_"] button:hover {
     background: rgba(255,255,255,0.07) !important;
     border-color: rgba(255,255,255,0.14) !important;
     color: var(--text) !important;
 }
 
-/* Sidebar buttons */
-section[data-testid="stSidebar"] .stButton > button {
-    width: 100% !important; max-width: none !important;
-    border-radius: 10px !important;
-    justify-content: flex-start !important;
-    text-align: left !important;
-    font-size: 13px !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
+/* Sidebar : boutons d'action à hauteur compacte commune */
+section[data-testid="stSidebar"] .stButton button,
+section[data-testid="stSidebar"] .stDownloadButton > button,
+section[data-testid="stSidebar"] .stFormSubmitButton > button {
+    min-height: var(--ui-btn-h-sm);
+    font-size: var(--ui-fs-sm);
 }
-/* Nouvelle conversation (primary) */
-section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+/* Nouvelle conversation */
+div.st-key-btn_new_chat button {
     background: transparent !important; color: var(--text) !important;
     border: 1px solid rgba(255,255,255,0.14) !important;
-    height: 40px !important; font-weight: 500 !important;
+    min-height: var(--ui-btn-h) !important; font-weight: 500 !important;
     padding: 0 14px !important; margin-bottom: 4px !important;
+    justify-content: flex-start !important;
 }
-section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
-    background: rgba(255,255,255,0.05) !important;
-}
-/* Discussions (secondary) */
-section[data-testid="stSidebar"] .stButton > button[kind="secondary"] {
+div.st-key-btn_new_chat button:hover { background: rgba(255,255,255,0.05) !important; }
+/* Liste des discussions (clés disc_…) : éléments de liste, pas des boutons d'action */
+div[class*="st-key-disc_"] button {
     background: transparent !important; color: var(--text-muted) !important;
-    border: none !important; height: auto !important; min-height: 36px !important;
-    font-weight: 450 !important; padding: 8px 12px !important;
+    border: none !important; min-height: 34px !important;
+    font-weight: 450 !important; padding: 6px 10px !important;
+    justify-content: flex-start !important; text-align: left !important;
 }
-section[data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover {
+div[class*="st-key-disc_"] button > div {
+    justify-content: flex-start !important; min-width: 0 !important; width: 100%;
+}
+div[class*="st-key-disc_"] button p {
+    white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;
+}
+div[class*="st-key-disc_"] button:hover {
     background: rgba(255,255,255,0.05) !important; color: var(--text) !important;
-    border: none !important; transform: none !important;
 }
-section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] .stButton > button {
-    min-height: 28px !important;
-    padding: 0 4px !important;
-    font-size: 12px !important;
-}
+div[class*="st-key-disc_actif_"] button { background: rgba(255,255,255,0.07) !important; color: var(--text) !important; }
 /* Menu ⋯ des discussions — un seul petit bouton */
 section[data-testid="stSidebar"] [data-testid="stPopover"] > button,
 section[data-testid="stSidebar"] [data-testid="stPopover"] button {
@@ -574,8 +581,17 @@ section[data-testid="stSidebar"] [data-testid="stPopover"] button:hover {
     background: rgba(255,255,255,0.08) !important;
     color: var(--text) !important;
 }
-section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"]
-  > div[data-testid="column"]:last-child {
+section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-disc_"]) {
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-disc_"])
+  > div:first-child {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-disc_"])
+  > div:last-child {
     flex: 0 0 32px !important;
     width: 32px !important;
     min-width: 32px !important;
@@ -631,7 +647,6 @@ section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"]
     border-radius: 10px !important;
 }
 .stSlider > div > div > div > div { background: var(--accent) !important; }
-label { color: var(--text-muted) !important; font-size: 12px !important; font-weight: 500 !important; }
 
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -686,10 +701,10 @@ div[data-testid="stPopoverBody"],
     border-radius: 10px !important;
     box-shadow: 0 12px 32px rgba(0,0,0,0.45) !important;
     /* Compact par défaut (menu ⋯ discussions) */
-    padding: 3px !important;
-    min-width: 0 !important;
+    padding: 4px !important;
+    min-width: 168px !important;
     width: max-content !important;
-    max-width: 132px !important;
+    max-width: min(240px, calc(100vw - 24px)) !important;
 }
 [data-testid="stPopoverBody"] [data-testid="stVerticalBlock"] {
     gap: 0 !important;
@@ -698,30 +713,41 @@ div[data-testid="stPopoverBody"],
 [data-testid="stPopoverBody"] .stElementContainer {
     margin-bottom: 0 !important;
 }
-[data-testid="stPopoverBody"] .stButton > button,
-[data-testid="stPopoverBody"] button[kind="secondary"] {
+[data-testid="stPopoverBody"] .stButton button {
     background: transparent !important;
     color: var(--text) !important;
     border: none !important;
     border-radius: 6px !important;
     justify-content: flex-start !important;
     text-align: left !important;
-    height: 26px !important;
-    min-height: 26px !important;
-    padding: 0 8px !important;
-    font-size: 12px !important;
+    height: 32px !important;
+    min-height: 32px !important;
+    padding: 0 10px !important;
+    font-size: 13px !important;
     font-weight: 450 !important;
     width: 100% !important;
     box-shadow: none !important;
 }
-[data-testid="stPopoverBody"] .stButton > button:hover,
-[data-testid="stPopoverBody"] button[kind="secondary"]:hover {
+[data-testid="stPopoverBody"] .stButton button > div,
+[data-testid="stPopoverBody"] .stTooltipIcon,
+[data-testid="stPopoverBody"] .stTooltipHoverTarget {
+    width: 100%;
+    justify-content: flex-start !important;
+}
+[data-testid="stPopoverBody"] div[class*="st-key-danger_"] button {
+    color: #ec8b8b !important;
+}
+[data-testid="stPopoverBody"] div[class*="st-key-danger_"] button:hover {
+    background: rgba(201,74,74,0.14) !important;
+    color: #f3a3a3 !important;
+}
+[data-testid="stPopoverBody"] .stButton button:hover {
     background: rgba(255,255,255,0.06) !important;
     color: var(--text) !important;
     border: none !important;
     transform: none !important;
 }
-[data-testid="stPopoverBody"] .stButton > button[kind="primary"] {
+[data-testid="stPopoverBody"] .stButton button[kind="primary"] {
     background: rgba(91,159,212,0.14) !important;
     color: #c5e2f7 !important;
     border: none !important;
@@ -734,7 +760,7 @@ div[data-testid="stPopoverBody"],
     padding: 6px !important;
     border-radius: 14px !important;
 }
-[data-testid="stPopoverBody"]:has(.plus-menu) .stButton > button {
+[data-testid="stPopoverBody"]:has(.plus-menu) .stButton button {
     height: 40px !important;
     min-height: 40px !important;
     padding: 0 12px !important;
@@ -772,53 +798,6 @@ div[data-testid="stPopoverBody"],
     box-shadow: 0 0 0 3px rgba(91,159,212,0.2);
 }
 
-/* Popup confirmation suppression */
-div[data-testid="stDialog"] div[role="dialog"] {
-    width: min(400px, 94vw) !important;
-}
-div[data-testid="stDialog"] div[role="dialog"] {
-    background: #2a2a28 !important;
-    border: 1px solid rgba(255,255,255,0.1) !important;
-    border-radius: 16px !important;
-    padding: 1rem 0.75rem 0.85rem !important;
-}
-div[data-testid="stDialog"] h2 {
-    color: var(--text) !important;
-    font-size: 1.15rem !important;
-    font-weight: 600 !important;
-    text-align: center !important;
-    margin: 0.2rem 0 0.75rem 0 !important;
-}
-.del-dialog { text-align: center; padding: 4px 8px 10px; }
-.del-dialog-ico {
-    font-size: 28px; line-height: 1;
-    margin-bottom: 10px; opacity: 0.9;
-}
-.del-dialog-msg {
-    color: var(--text);
-    font-size: 15px; line-height: 1.5;
-    margin: 0 0 8px 0;
-}
-.del-dialog-msg strong { color: #fff; font-weight: 600; }
-.del-dialog-hint {
-    color: var(--text-dim);
-    font-size: 12.5px; margin: 0 0 4px 0;
-}
-div[data-testid="stDialog"] div.st-key-confirm_del_yes button {
-    background: #c44b4b !important;
-    border: none !important;
-    color: #fff !important;
-}
-div[data-testid="stDialog"] div.st-key-confirm_del_yes button:hover {
-    background: #d45a5a !important;
-    border: none !important;
-    color: #fff !important;
-}
-div[data-testid="stDialog"] div.st-key-confirm_del_no button {
-    background: rgba(255,255,255,0.06) !important;
-    border: 1px solid rgba(255,255,255,0.12) !important;
-    color: var(--text) !important;
-}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -1064,11 +1043,11 @@ def supprimer_discussion(cid: str) -> bool:
         return False
     if c.get("figee"):
         return False
-    try:
-        if not _db().supprimer_conversation(cid):
+    db = _db()
+    if db.obtenir_conversation(cid) is not None:
+        if not db.supprimer_conversation(cid):
             return False
-    except Exception:
-        return False
+    # Sinon : discussion jamais enregistrée (présente seulement dans cette session)
 
     st.session_state.conversations = [
         x for x in st.session_state.conversations if x["id"] != cid
@@ -1095,14 +1074,18 @@ def supprimer_discussion(cid: str) -> bool:
     return True
 
 
+CLE_SUPPR_DISCUSSION = "confirm_del_id"
+CLE_RENOMMER_DISCUSSION = "edit_titre_id"
+CLE_SUPPR_COLLECTION = "confirm_del_collection"
+
+
 def _fermer_confirm_suppression() -> None:
-    st.session_state.pop("confirm_del_id", None)
+    annuler_confirmation(CLE_SUPPR_DISCUSSION)
 
 
-@st.dialog("Supprimer la discussion", width="small", on_dismiss=_fermer_confirm_suppression)
+@st.dialog("Supprimer cette conversation ?", width="small", on_dismiss=_fermer_confirm_suppression)
 def _dialog_confirm_suppression() -> None:
-    """Popup de confirmation avant suppression d'une discussion."""
-    del_id = st.session_state.get("confirm_del_id")
+    del_id = confirmation_en_attente(CLE_SUPPR_DISCUSSION)
     cible = _trouver_discussion(del_id) if del_id else None
     if not cible or cible.get("figee"):
         _fermer_confirm_suppression()
@@ -1110,42 +1093,122 @@ def _dialog_confirm_suppression() -> None:
         return
 
     titre = (cible.get("titre") or "Nouvelle discussion").strip() or "Nouvelle discussion"
-    st.markdown(
-        f"""
-        <div class="del-dialog">
-          <div class="del-dialog-ico">🗑</div>
-          <p class="del-dialog-msg">
-            Voulez-vous vraiment supprimer<br>
-            <strong>« {html_lib.escape(titre)} »</strong>&nbsp;?
-          </p>
-          <p class="del-dialog-hint">Cette action est définitive.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    texte_dialogue(
+        "La conversation {nom} sera supprimée de votre historique.",
+        nom=f"« {titre[:80]} »",
+        note="Cette action ne pourra pas être annulée.",
     )
-    c_annuler, c_ok = st.columns(2)
-    with c_annuler:
-        if st.button("Annuler", key="confirm_del_no", use_container_width=True):
-            _fermer_confirm_suppression()
+    erreur = erreur_confirmation(CLE_SUPPR_DISCUSSION)
+    if erreur:
+        afficher_erreur(erreur)
+    annuler, confirmer = pied_dialogue("suppr_conv", "Supprimer", danger=True)
+    if annuler:
+        _fermer_confirm_suppression()
+        st.rerun()
+    if confirmer:
+        with st.spinner("Suppression…"):
+            ok = executer_confirmation(
+                CLE_SUPPR_DISCUSSION,
+                del_id,
+                lambda: supprimer_discussion(del_id),
+                succes="Conversation supprimée.",
+                echec="La conversation n'a pas pu être supprimée. Réessayez dans un instant.",
+            )
+        if ok is not None:
             st.rerun()
-    with c_ok:
-        if st.button(
-            "Oui, supprimer",
-            key="confirm_del_yes",
-            use_container_width=True,
-            type="primary",
-        ):
-            if supprimer_discussion(del_id):
-                _fermer_confirm_suppression()
-                st.toast("Discussion supprimée")
-            else:
-                st.error("Suppression impossible.")
+
+
+def _fermer_renommage() -> None:
+    annuler_confirmation(CLE_RENOMMER_DISCUSSION)
+
+
+@st.dialog("Renommer la conversation", width="small", on_dismiss=_fermer_renommage)
+def _dialog_renommer() -> None:
+    cid = confirmation_en_attente(CLE_RENOMMER_DISCUSSION)
+    cible = _trouver_discussion(cid) if cid else None
+    if not cible or cible.get("figee"):
+        _fermer_renommage()
+        st.rerun()
+        return
+    with st.form(f"form_rename_{cid}", clear_on_submit=False, border=False):
+        nouveau = st.text_input(
+            "Nouveau titre",
+            value=cible.get("titre") or "",
+            max_chars=120,
+            placeholder="Ex. : Déploiement Docker",
+        )
+        zone_erreur = st.empty()
+        g, d = st.columns(2, gap="small")
+        with g:
+            annuler = st.form_submit_button("Annuler", use_container_width=True)
+        with d:
+            enregistrer = st.form_submit_button("Enregistrer", type="primary", use_container_width=True)
+    if annuler:
+        _fermer_renommage()
+        st.rerun()
+    if enregistrer:
+        if not (nouveau or "").strip():
+            with zone_erreur:
+                afficher_erreur("Le titre ne peut pas être vide.")
+        elif renommer_discussion(cid, nouveau):
+            _fermer_renommage()
+            notifier("Titre mis à jour.")
+            st.rerun()
+        else:
+            with zone_erreur:
+                afficher_erreur("Le titre n'a pas pu être enregistré. Réessayez.")
+
+
+def _fermer_suppr_collection() -> None:
+    annuler_confirmation(CLE_SUPPR_COLLECTION)
+
+
+@st.dialog("Supprimer cette collection ?", width="small", on_dismiss=_fermer_suppr_collection)
+def _dialog_suppr_collection() -> None:
+    demande = confirmation_en_attente(CLE_SUPPR_COLLECTION)
+    if not demande:
+        st.rerun()
+        return
+    col_id, nom = demande
+    try:
+        nb = len(_favoris().lister_favoris(col_id))
+    except Exception as exc:
+        nb = 0
+        message_erreur("Lecture des favoris de la collection impossible", exc)
+    texte_dialogue(
+        "Vous êtes sur le point de supprimer la collection {nom}"
+        + (f" et les {nb} favori(s) qu'elle contient." if nb else " (elle ne contient aucun favori)."),
+        nom=f"« {nom} »",
+        note="Les conversations ne sont pas concernées. Cette action ne pourra pas être annulée.",
+    )
+    erreur = erreur_confirmation(CLE_SUPPR_COLLECTION)
+    if erreur:
+        afficher_erreur(erreur)
+    annuler, confirmer = pied_dialogue("suppr_coll", "Supprimer", danger=True)
+    if annuler:
+        _fermer_suppr_collection()
+        st.rerun()
+    if confirmer:
+        ok = executer_confirmation(
+            CLE_SUPPR_COLLECTION,
+            demande,
+            lambda: _favoris().supprimer_collection(col_id),
+            succes="Collection supprimée.",
+            echec="La collection n'a pas pu être supprimée. Réessayez dans un instant.",
+        )
+        if ok is not None:
+            st.session_state.pop("sel_collection_fav", None)
             st.rerun()
 
 
 def afficher_dialog_suppression_si_besoin() -> None:
-    if st.session_state.get("confirm_del_id"):
+    """Une seule fenêtre à la fois (Streamlit n'en affiche qu'une par run)."""
+    if confirmation_en_attente(CLE_SUPPR_DISCUSSION):
         _dialog_confirm_suppression()
+    elif confirmation_en_attente(CLE_RENOMMER_DISCUSSION):
+        _dialog_renommer()
+    elif confirmation_en_attente(CLE_SUPPR_COLLECTION):
+        _dialog_suppr_collection()
 
 
 def modifier_message(idx: int, nouveau_contenu: str) -> bool:
@@ -1411,7 +1474,7 @@ def afficher_sources(docs: list, msg_idx: int = 0):
                 ):
                     st.session_state.show_auth_dialog = True
                     st.session_state.auth_email_step = "email"
-                    st.toast("Connectez-vous pour enregistrer un favori")
+                    notifier("Connectez-vous pour enregistrer un favori.", "info")
                     st.rerun()
             else:
                 deja = _favoris().est_deja_favori(
@@ -1423,8 +1486,13 @@ def afficher_sources(docs: list, msg_idx: int = 0):
                     disabled=deja,
                     use_container_width=True,
                 ):
-                    _favoris().ajouter_favori(doc, collection_id=col_ids.get(cible))
-                    st.toast(f"Ajouté à « {cible} »")
+                    try:
+                        _favoris().ajouter_favori(doc, collection_id=col_ids.get(cible))
+                    except Exception as exc:
+                        message_erreur("Ajout du favori impossible", exc)
+                        notifier("Le favori n'a pas pu être enregistré.", "erreur")
+                    else:
+                        notifier(f"Ajouté à « {cible} ».")
                     st.rerun()
 
 
@@ -1529,9 +1597,7 @@ def _traiter_actions_url() -> None:
             note = int(note_raw if not isinstance(note_raw, list) else note_raw[0])
             idx = int(idx_raw if not isinstance(idx_raw, list) else idx_raw[0])
             if _enregistrer_feedback_msg(idx, note):
-                st.toast(
-                    "👍 Envoyé à l'admin" if note > 0 else "👎 Envoyé à l'admin"
-                )
+                notifier("Merci, votre avis a été enregistré.")
                 changed = True
         except Exception:
             pass
@@ -1675,10 +1741,10 @@ def _afficher_actions_message(msg_idx: int, contenu: str, role: str) -> None:
             ):
                 if _enregistrer_feedback_msg(msg_idx, 1):
                     deja.append(fb_key)
-                    st.toast("👍 Envoyé à l'admin")
+                    notifier("Merci, votre avis a été enregistré.")
                     st.rerun()
                 else:
-                    st.toast("Échec enregistrement feedback")
+                    st.toast("Votre avis n'a pas pu être enregistré.", icon=":material/error:")
         with c_dn:
             if st.button(
                 "👎",
@@ -1688,10 +1754,10 @@ def _afficher_actions_message(msg_idx: int, contenu: str, role: str) -> None:
             ):
                 if _enregistrer_feedback_msg(msg_idx, -1):
                     deja.append(fb_key)
-                    st.toast("👎 Envoyé à l'admin")
+                    notifier("Merci, votre avis a été enregistré.")
                     st.rerun()
                 else:
-                    st.toast("Échec enregistrement feedback")
+                    st.toast("Votre avis n'a pas pu être enregistré.", icon=":material/error:")
 
     if en_edition and not figee:
         nouveau = st.text_area(
@@ -1700,21 +1766,8 @@ def _afficher_actions_message(msg_idx: int, contenu: str, role: str) -> None:
             height=180,
             key=f"inline_edit_{role}_{msg_idx}",
         )
-        s1, s2 = st.columns(2)
-        with s1:
-            if st.button(
-                "Enregistrer",
-                key=f"inline_save_{role}_{msg_idx}",
-                type="primary",
-                use_container_width=True,
-            ):
-                if modifier_message(msg_idx, nouveau):
-                    st.session_state.edit_msg_idx = None
-                    st.toast("Message mis à jour")
-                    st.rerun()
-                else:
-                    st.warning("Modification impossible.")
-        with s2:
+        s_annuler, s_ok = st.columns(2, gap="small")
+        with s_annuler:
             if st.button(
                 "Annuler",
                 key=f"inline_cancel_{role}_{msg_idx}",
@@ -1722,6 +1775,22 @@ def _afficher_actions_message(msg_idx: int, contenu: str, role: str) -> None:
             ):
                 st.session_state.edit_msg_idx = None
                 st.rerun()
+        with s_ok:
+            enregistrer = st.button(
+                "Enregistrer",
+                key=f"inline_save_{role}_{msg_idx}",
+                type="primary",
+                use_container_width=True,
+            )
+        if enregistrer:
+            if not (nouveau or "").strip():
+                afficher_erreur("Le message ne peut pas être vide.")
+            elif modifier_message(msg_idx, nouveau):
+                st.session_state.edit_msg_idx = None
+                notifier("Message mis à jour.")
+                st.rerun()
+            else:
+                afficher_erreur("Le message n'a pas pu être modifié.")
 
 
 def url_valide(doc: dict) -> bool:
@@ -1735,7 +1804,13 @@ def url_valide(doc: dict) -> bool:
 with st.sidebar:
     barre_compte_sidebar()
 
-    if st.button("＋  Nouvelle conversation", use_container_width=True, key="btn_new_chat", type="primary"):
+    if st.button(
+        "Nouvelle conversation",
+        icon=":material/add:",
+        use_container_width=True,
+        key="btn_new_chat",
+        type="primary",
+    ):
         nouvelle_discussion()
         st.rerun()
 
@@ -1773,17 +1848,47 @@ with st.sidebar:
             st.caption("Connectez-vous pour enregistrer des favoris et collections.")
         else:
             cols = _favoris().lister_collections()
-            noms = [c["nom"] for c in cols] or ["Général"]
-            ids = {c["nom"]: c["id"] for c in cols}
-            choix = st.selectbox("Collection", noms, key="sel_collection_fav")
-            with st.form("form_new_collection", clear_on_submit=True):
-                nouveau_nom = st.text_input("Nouvelle collection", max_chars=80)
-                if st.form_submit_button("Créer", use_container_width=True):
-                    if nouveau_nom.strip():
-                        _favoris().creer_collection(nouveau_nom.strip())
-                        st.toast("Collection créée")
+            par_id = {c["id"]: c for c in cols}
+            defaut_id = _favoris().collection_defaut_id()
+            if st.session_state.get("sel_collection_fav") not in par_id:
+                st.session_state.pop("sel_collection_fav", None)
+            choix_id = st.selectbox(
+                "Collection",
+                list(par_id),
+                format_func=lambda i: f"{par_id[i]['nom']} ({par_id[i]['nb']})",
+                key="sel_collection_fav",
+            )
+            if choix_id and choix_id != defaut_id:
+                if st.button(
+                    "Supprimer la collection",
+                    key="danger_btn_del_collection",
+                    type="tertiary",
+                    icon=":material/delete:",
+                    help="Supprime la collection et ses favoris (après confirmation)",
+                ):
+                    demander_confirmation(CLE_SUPPR_COLLECTION, (choix_id, par_id[choix_id]["nom"]))
+                    st.rerun()
+            noms_existants = {c["nom"].strip().casefold() for c in cols}
+            with st.form("form_new_collection", clear_on_submit=False, border=False):
+                nouveau_nom = st.text_input(
+                    "Nouvelle collection", max_chars=80, placeholder="Nom de la collection"
+                )
+                creer = st.form_submit_button("Créer la collection", use_container_width=True)
+            if creer:
+                nom = (nouveau_nom or "").strip()
+                if not nom:
+                    afficher_erreur("Indiquez un nom de collection.")
+                elif nom.casefold() in noms_existants:
+                    afficher_erreur("Une collection porte déjà ce nom.")
+                else:
+                    try:
+                        _favoris().creer_collection(nom)
+                    except Exception as exc:
+                        afficher_erreur("La collection n'a pas pu être créée.", exc)
+                    else:
+                        notifier("Collection créée.")
                         st.rerun()
-            favs = _favoris().lister_favoris(ids.get(choix))
+            favs = _favoris().lister_favoris(choix_id) if choix_id else []
             if not favs:
                 st.caption("Aucun favori dans cette collection.")
             for fav in favs[:30]:
@@ -1794,8 +1899,21 @@ with st.sidebar:
                     st.markdown(f"[ouvrir]({fav['url']})")
                 if fav.get("extrait"):
                     st.caption((fav["extrait"] or "")[:160] + "…")
-                if st.button("Retirer", key=f"rm_fav_{fav['id']}", use_container_width=True):
-                    _favoris().supprimer_favori(fav["id"])
+                if st.button(
+                    "Retirer des favoris",
+                    key=f"rm_fav_{fav['id']}",
+                    type="tertiary",
+                    icon=":material/bookmark_remove:",
+                ):
+                    try:
+                        retire = _favoris().supprimer_favori(fav["id"])
+                    except Exception as exc:
+                        retire = False
+                        message_erreur("Retrait du favori impossible", exc)
+                    if retire:
+                        notifier("Favori retiré.")
+                    else:
+                        notifier("Le favori n'a pas pu être retiré.", "erreur")
                     st.rerun()
                 st.divider()
 
@@ -1809,75 +1927,68 @@ with st.sidebar:
         discussions,
         key=lambda x: (0 if x.get("figee") else 1, -(1 if x["id"] == st.session_state.conversation_id else 0)),
     )
+    if st.session_state.pop("_fermer_menus", False):
+        for _k in [k for k in st.session_state if str(k).startswith("menu_disc_")]:
+            st.session_state[_k] = False
     if discussions:
         st.markdown('<div class="sb-section"><div class="sb-section-title">Discussions</div></div>', unsafe_allow_html=True)
         for c in discussions:
             titre = c.get("titre") or "Nouvelle discussion"
             actif = c["id"] == st.session_state.conversation_id
             figee = bool(c.get("figee"))
-            prefix = ("▸ " if actif else "") + ("🔒 " if figee else "")
-            label = prefix + titre
+            label = ("🔒 " if figee else "") + titre
             row = st.columns([9, 1], gap="small")
             with row[0]:
-                if st.button(label, key=f"disc_{c['id']}", use_container_width=True, type="secondary"):
+                if st.button(
+                    label,
+                    key=f"disc_actif_{c['id']}" if actif else f"disc_{c['id']}",
+                    use_container_width=True,
+                    help=titre + (" (discussion ouverte)" if actif else ""),
+                ):
                     charger_discussion(c["id"])
                     st.rerun()
             with row[1]:
-                with st.popover("⋯", help="Actions"):
-                    tip_fige = "Défiger" if figee else "Figer"
-                    if st.button(
-                        tip_fige,
-                        key=f"fig_{c['id']}",
-                        use_container_width=True,
-                    ):
-                        basculer_figee(c["id"])
-                        st.rerun()
+                with st.popover(
+                    "⋯",
+                    help=f"Actions sur « {titre[:40]} »",
+                    key=f"menu_disc_{c['id']}",
+                    on_change=lambda: None,
+                ):
                     if st.button(
                         "Renommer",
                         key=f"ren_{c['id']}",
+                        icon=":material/edit:",
                         use_container_width=True,
                         disabled=figee,
+                        help="Défigez la discussion pour la renommer" if figee else None,
                     ):
-                        st.session_state["edit_titre_id"] = c["id"]
+                        demander_confirmation(CLE_RENOMMER_DISCUSSION, c["id"])
+                        st.session_state["_fermer_menus"] = True
+                        st.rerun()
+                    if st.button(
+                        "Défiger" if figee else "Figer",
+                        key=f"fig_{c['id']}",
+                        icon=":material/lock_open:" if figee else ":material/lock:",
+                        use_container_width=True,
+                        help="Une discussion figée ne peut être ni modifiée ni supprimée",
+                    ):
+                        if basculer_figee(c["id"]):
+                            notifier("Discussion défigée." if figee else "Discussion figée.")
+                        else:
+                            notifier("Le changement n'a pas pu être enregistré.", "erreur")
+                        st.session_state["_fermer_menus"] = True
                         st.rerun()
                     if st.button(
                         "Supprimer",
-                        key=f"del_{c['id']}",
+                        key=f"danger_del_{c['id']}",
+                        icon=":material/delete:",
                         use_container_width=True,
                         disabled=figee,
+                        help="Défigez la discussion pour la supprimer" if figee else None,
                     ):
-                        st.session_state["confirm_del_id"] = c["id"]
+                        demander_confirmation(CLE_SUPPR_DISCUSSION, c["id"])
+                        st.session_state["_fermer_menus"] = True
                         st.rerun()
-
-        # Formulaire de renommage
-        edit_id = st.session_state.get("edit_titre_id")
-        if edit_id:
-            cible = _trouver_discussion(edit_id)
-            if cible and not cible.get("figee"):
-                with st.form(key=f"form_rename_{edit_id}", clear_on_submit=True):
-                    nouveau = st.text_input(
-                        "Nouveau titre",
-                        value=cible.get("titre") or "",
-                        max_chars=120,
-                        key=f"inp_rename_{edit_id}",
-                    )
-                    ok, annuler = st.columns(2)
-                    with ok:
-                        submitted = st.form_submit_button("Enregistrer", use_container_width=True)
-                    with annuler:
-                        cancel = st.form_submit_button("Annuler", use_container_width=True)
-                    if cancel:
-                        st.session_state.pop("edit_titre_id", None)
-                        st.rerun()
-                    if submitted:
-                        if renommer_discussion(edit_id, nouveau):
-                            st.session_state.pop("edit_titre_id", None)
-                            st.toast("Titre mis à jour")
-                        else:
-                            st.warning("Impossible de renommer (vide ou figée).")
-                        st.rerun()
-            else:
-                st.session_state.pop("edit_titre_id", None)
 
     # Export juste au-dessus du bloc connexion / déconnexion
     if st.session_state.messages:
@@ -1928,7 +2039,7 @@ with st.sidebar:
                     help="Télécharger en PDF",
                 )
             except Exception as exc:
-                st.caption(f"PDF indisponible : {exc}")
+                st.caption(message_erreur("PDF indisponible pour cette conversation.", exc))
 
     # Auth en bas de sidebar
     _u_sb = utilisateur_session()
@@ -1954,8 +2065,14 @@ with st.sidebar:
                 st.session_state.auth_email_step = "email"
                 st.rerun()
         else:
-            if st.button("Se déconnecter", key="btn_logout", use_container_width=True):
+            if st.button(
+                "Se déconnecter",
+                key="btn_logout",
+                icon=":material/logout:",
+                use_container_width=True,
+            ):
                 deconnecter()
+                notifier("Vous êtes déconnecté.", "info")
                 st.rerun()
 
 
@@ -1978,7 +2095,14 @@ if not st.session_state.pret:
         ph.empty()
         st.rerun()
     except Exception as e:
-        ph.error(f"❌ {e}")
+        ph.error(
+            message_erreur(
+                "L'assistant n'a pas pu démarrer (base documentaire ou modèle indisponible).",
+                e,
+                "Rechargez la page dans un instant ; si le problème persiste, contactez l'administrateur.",
+            ),
+            icon=":material/error:",
+        )
         st.stop()
 
 
@@ -2051,7 +2175,7 @@ with col:
         cs = st.columns(2)
         for i, sug in enumerate(suggestions):
             with cs[i % 2]:
-                if st.button(sug, key=f"s{i}", use_container_width=True, type="secondary"):
+                if st.button(sug, key=f"sug_{i}", use_container_width=True):
                     st.session_state["_sug"] = sug + " ?"
                     st.rerun()
 
@@ -2149,16 +2273,26 @@ with col:
                             height=80,
                             placeholder="Ex. : la citation ne correspond pas à la réponse…",
                         )
-                        if st.button("Envoyer le signalement", key=f"btn_signal_{msg_idx}"):
+                        cle_envoye = f"signal_envoye:{st.session_state.conversation_id}:{msg_idx}"
+                        deja_signale = bool(st.session_state.get(cle_envoye))
+                        if deja_signale:
+                            st.caption("Signalement transmis à l'administrateur. Merci.")
+                        if st.button(
+                            "Envoyer le signalement",
+                            key=f"btn_signal_{msg_idx}",
+                            disabled=deja_signale,
+                        ):
                             texte = (motif or "").strip()
                             if not texte:
-                                st.warning("Ajoutez un court commentaire.")
+                                afficher_avertissement("Décrivez le problème en quelques mots.")
                             elif _enregistrer_feedback_msg(
                                 msg_idx, -1, f"[signalement] {texte}"
                             ):
-                                st.toast("Signalement envoyé à l'admin")
+                                st.session_state[cle_envoye] = True
+                                notifier("Signalement envoyé. Merci.")
+                                st.rerun()
                             else:
-                                st.error("Impossible d'enregistrer le signalement.")
+                                afficher_erreur("Le signalement n'a pas pu être enregistré. Réessayez.")
 
     if st.session_state.en_cours:
         st.markdown(
@@ -2308,7 +2442,7 @@ with col:
                     ajoutés += 1
             if ajoutés:
                 st.session_state.show_files = False
-                st.toast(f"{ajoutés} fichier(s) ajouté(s)")
+                notifier(f"{ajoutés} fichier(s) ajouté(s).")
                 st.rerun()
 
     # Panneau caméra (si demandé via +)
@@ -2333,7 +2467,11 @@ with col:
                     texte = transcrire_audio(audio)
                 except Exception as e:
                     texte = ""
-                    st.warning(f"Transcription impossible : {e}")
+                    afficher_avertissement(
+                        message_erreur(
+                            "La transcription a échoué.", e, "Réessayez ou saisissez votre question."
+                        )
+                    )
             if texte:
                 st.session_state["_sug"] = texte
                 st.session_state.show_audio = False
@@ -2549,7 +2687,12 @@ if st.session_state.en_cours and st.session_state.messages:
 
     except Exception as e:
         st.session_state.messages.append({
-            "role": "assistant", "content": f"❌ Erreur : {e}",
+            "role": "assistant",
+            "content": message_erreur(
+                "Je n'ai pas pu générer de réponse cette fois-ci.",
+                e,
+                "Réessayez dans un instant ou reformulez la question.",
+            ),
             "docs": [], "tokens": 0, "latence": 0, "avec_fichier": a_un_fichier,
             "sans_sources": False, "abstention": False,
         })

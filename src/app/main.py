@@ -29,9 +29,16 @@ import streamlit as st
 
 import app.auth_basique as _auth_basique
 from app import identite as _identite
+from app import ui_composants as _ui_composants
+from app import ui_theme as _ui_theme
 
-# Évite le cache Python/Streamlit d'une ancienne version du module auth
+# Évite le cache Python/Streamlit d'une ancienne version
 importlib.reload(_auth_basique)
+importlib.reload(_ui_theme)
+importlib.reload(_ui_composants)
+
+injecter_theme = _ui_theme.injecter_theme
+afficher_notifications = _ui_composants.afficher_notifications
 
 est_admin_session = _auth_basique.est_admin_session
 
@@ -60,28 +67,9 @@ if est_admin_session():
 
 pg = st.navigation(_pages, position="sidebar")
 
-# Pop-ups (st.dialog et st.toast) centrés à l'écran
-st.markdown(
-    """
-<style>
-div[data-testid="stDialog"] div:has(> div[role="dialog"]) {
-    align-items: flex-start !important;
-    padding: 1rem 0 !important;
-}
-div[data-testid="stDialog"] div[role="dialog"] {
-    margin: auto !important;
-}
-div[data-testid="stToastContainer"] {
-    top: 50% !important;
-    bottom: auto !important;
-    left: 50% !important;
-    right: auto !important;
-    transform: translate(-50%, -50%) !important;
-    align-items: center !important;
-}
-</style>
-""",
-    unsafe_allow_html=True,
-)
+# Système de design commun (boutons, fenêtres, champs, notifications) puis
+# notifications mises en file par l'action du run précédent.
+injecter_theme()
+afficher_notifications()
 
 pg.run()

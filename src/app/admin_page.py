@@ -34,6 +34,21 @@ utilisateur_session = _auth_basique.utilisateur_session
 
 from app.historique_sqlite import HistoriqueSQLite
 from app.quotas import QUOTAS
+from app.ui_composants import (
+    afficher_avertissement,
+    afficher_erreur,
+    annuler_confirmation,
+    confirmation_en_attente,
+    demander_confirmation,
+    erreur_confirmation,
+    executer_confirmation,
+    message_erreur,
+    notifier,
+    pied_dialogue,
+    texte_dialogue,
+)
+
+CLE_ADMIN = "admin_confirmation"
 
 
 def _aller_accueil() -> None:
@@ -112,8 +127,6 @@ st.markdown(
         padding: 1.1rem 1.6rem 2.5rem !important;
         max-width: 1280px !important;
     }
-    #MainMenu, footer, header { visibility: hidden; }
-
     /* ── Sidebar ── */
     [data-testid="stSidebar"] {
         background: #0a0e17 !important;
@@ -165,18 +178,6 @@ st.markdown(
         word-break: break-all;
         line-height: 1.35;
     }
-    section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
-        background: var(--ad-blue) !important;
-        color: #fff !important;
-        border: none !important;
-        border-radius: 10px !important;
-        font-weight: 550 !important;
-        min-height: 40px !important;
-    }
-    section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
-        background: #2563eb !important;
-    }
-
     /* ── Hero ── */
     .admin-hero {
         background:
@@ -380,19 +381,6 @@ st.markdown(
         color: var(--ad-text) !important;
         font-weight: 650 !important;
     }
-    .stButton > button {
-        border-radius: 10px !important;
-        font-family: 'IBM Plex Sans', system-ui, sans-serif !important;
-    }
-    .stButton > button[kind="primary"] {
-        background: var(--ad-blue) !important;
-        border: none !important;
-    }
-    .stButton > button[kind="secondary"] {
-        background: var(--ad-elev) !important;
-        border: 1px solid var(--ad-border) !important;
-        color: var(--ad-text) !important;
-    }
     [data-testid="stExpander"] {
         background: var(--ad-panel);
         border: 1px solid var(--ad-border);
@@ -462,6 +450,133 @@ def _pill_class(tier: str) -> str:
     }.get(t, "pill-guest")
 
 
+def _fermer_confirmation_admin() -> None:
+    annuler_confirmation(CLE_ADMIN)
+
+
+def _pied_confirmation_admin(demande: tuple, libelle: str, action, *, succes: str, echec: str,
+                             danger: bool = True, desactiver: bool = False) -> None:
+    erreur = erreur_confirmation(CLE_ADMIN)
+    if erreur:
+        afficher_erreur(erreur)
+    annuler, confirmer = pied_dialogue(
+        f"admin_{demande[0]}", libelle, danger=danger, desactiver=desactiver
+    )
+    if annuler:
+        _fermer_confirmation_admin()
+        st.rerun()
+    if confirmer:
+        with st.spinner("Traitement en cours…"):
+            ok = executer_confirmation(CLE_ADMIN, demande, action, succes=succes, echec=echec)
+        if ok is not None:
+            st.rerun()
+
+
+@st.dialog("Modifier le rôle ?", width="small", on_dismiss=_fermer_confirmation_admin)
+def _dialog_role(demande: tuple) -> None:
+    _, user_id, nom, nouveau = demande
+    if nouveau == "admin":
+        texte_dialogue(
+            "Le compte {nom} obtiendra le rôle administrateur : accès au tableau de bord, "
+            "au corpus et aux paramètres de l'IA.",
+            nom=nom,
+        )
+    else:
+        texte_dialogue(f"Le compte {{nom}} passera au rôle « {nouveau} ».", nom=nom)
+    _pied_confirmation_admin(
+        demande,
+        "Modifier le rôle",
+        lambda: db.set_tier(user_id, nouveau, admin_id=admin["id"]),
+        succes=f"Rôle mis à jour : {nouveau}.",
+        echec="Le rôle n'a pas pu être modifié.",
+        danger=False,
+    )
+
+
+@st.dialog("Suspendre ce compte ?", width="small", on_dismiss=_fermer_confirmation_admin)
+def _dialog_suspension(demande: tuple) -> None:
+    _, user_id, nom, _ = demande
+    texte_dialogue(
+        "Le compte {nom} ne pourra plus utiliser l'assistant tant qu'il sera suspendu.",
+        nom=nom,
+        note="Vous pourrez le réactiver à tout moment.",
+    )
+    _pied_confirmation_admin(
+        demande,
+        "Suspendre",
+        lambda: db.suspendre(user_id, True, admin_id=admin["id"]),
+        succes="Compte suspendu.",
+        echec="Le compte n'a pas pu être suspendu.",
+    )
+
+
+@st.dialog("Supprimer ce dépôt de l'index ?", width="medium", on_dismiss=_fermer_confirmation_admin)
+def _dialog_suppr_repo(demande: tuple) -> None:
+    _, repo, _, _ = demande
+    texte_dialogue(
+        "Tous les passages du dépôt {nom} seront retirés de la base Qdrant et du fichier de "
+        "chunks local. L'assistant ne pourra plus les citer.",
+        nom=repo,
+        note="Cette action ne pourra pas être annulée (il faudra ré-indexer le dépôt).",
+    )
+    saisie = st.text_input(
+        f"Pour confirmer, saisissez le nom du dépôt : {repo}",
+        key=f"admin_confirm_repo_{repo}",
+        placeholder=repo,
+    )
+    resultat: list = []
+
+    def _supprimer() -> bool:
+        ok, msg = admin_corpus.supprimer_repo(repo)
+        db.audit(admin["id"], "corpus_delete", msg)
+        resultat.append(msg)
+        return ok
+
+    _pied_confirmation_admin(
+        demande,
+        "Supprimer le dépôt",
+        _supprimer,
+        succes=f"Dépôt « {repo} » retiré de l'index.",
+        echec="La suppression du dépôt a échoué. Consultez les journaux du serveur.",
+        desactiver=(saisie or "").strip() != repo,
+    )
+
+
+@st.dialog("Recréer la collection ?", width="medium", on_dismiss=_fermer_confirmation_admin)
+def _dialog_reindex(demande: tuple) -> None:
+    texte_dialogue(
+        "La collection Qdrant sera {nom} puis reconstruite à partir du fichier d'embeddings. "
+        "Pendant l'opération, les recherches peuvent échouer ou être incomplètes.",
+        nom="vidée",
+        note="Les documents ajoutés manuellement depuis cette page seront perdus "
+        "s'ils ne figurent pas dans le fichier d'embeddings.",
+    )
+
+    def _reindexer() -> bool:
+        ok, msg = admin_corpus.reindexer_collection(recreer=True)
+        db.audit(admin["id"], "corpus_reindex", msg)
+        return ok
+
+    _pied_confirmation_admin(
+        demande,
+        "Recréer et ré-indexer",
+        _reindexer,
+        succes="Ré-indexation terminée (collection recréée).",
+        echec="La ré-indexation a échoué. Consultez les journaux du serveur.",
+    )
+
+
+_DIALOGUES_ADMIN = {
+    "role": _dialog_role,
+    "suspendre": _dialog_suspension,
+    "suppr_repo": _dialog_suppr_repo,
+    "reindex": _dialog_reindex,
+}
+_demande_admin = confirmation_en_attente(CLE_ADMIN)
+if _demande_admin and _demande_admin[0] in _DIALOGUES_ADMIN:
+    _DIALOGUES_ADMIN[_demande_admin[0]](_demande_admin)
+
+
 with st.sidebar:
     # Logo AssistDoc via st.logo() dans main.py (tout en haut)
     st.markdown('<div class="admin-sb-foot">', unsafe_allow_html=True)
@@ -472,12 +587,12 @@ with st.sidebar:
     if st.button(
         "Se déconnecter",
         key="admin_logout",
+        icon=":material/logout:",
         use_container_width=True,
-        type="primary",
         help="Quitter l'admin et revenir en mode invité",
     ):
         deconnecter()
-        st.toast("Déconnecté — mode invité")
+        notifier("Vous êtes déconnecté.", "info")
         _aller_accueil()
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -617,18 +732,40 @@ with modules[0]:
                     label_visibility="collapsed",
                 )
             with cols[1]:
-                if st.button("Appliquer", key=f"apply_tier_{u['id']}", use_container_width=True):
-                    db.set_tier(u["id"], nouveau, admin_id=admin["id"])
-                    st.toast(f"Tier → {nouveau}")
-                    st.rerun()
+                soi_meme = u["id"] == admin["id"]
+                if st.button(
+                    "Appliquer",
+                    key=f"apply_tier_{u['id']}",
+                    use_container_width=True,
+                    disabled=nouveau == u.get("tier"),
+                ):
+                    if soi_meme and nouveau != "admin":
+                        afficher_erreur("Vous ne pouvez pas retirer votre propre rôle administrateur.")
+                    elif nouveau == "admin" or u.get("tier") == "admin":
+                        demander_confirmation(CLE_ADMIN, ("role", u["id"], nom, nouveau))
+                        st.rerun()
+                    elif db.set_tier(u["id"], nouveau, admin_id=admin["id"]):
+                        notifier(f"Rôle mis à jour : {nouveau}.")
+                        st.rerun()
+                    else:
+                        afficher_erreur("Le rôle n'a pas pu être modifié.")
             with cols[2]:
                 if u.get("suspended"):
                     if st.button("Réactiver", key=f"unsus_{u['id']}", use_container_width=True):
-                        db.suspendre(u["id"], False, admin_id=admin["id"])
+                        if db.suspendre(u["id"], False, admin_id=admin["id"]):
+                            notifier("Compte réactivé.")
+                        else:
+                            notifier("Le compte n'a pas pu être réactivé.", "erreur")
                         st.rerun()
                 else:
-                    if st.button("Suspendre", key=f"sus_{u['id']}", use_container_width=True):
-                        db.suspendre(u["id"], True, admin_id=admin["id"])
+                    if st.button(
+                        "Suspendre",
+                        key=f"danger_sus_{u['id']}",
+                        use_container_width=True,
+                        disabled=soi_meme,
+                        help="Vous ne pouvez pas suspendre votre propre compte" if soi_meme else None,
+                    ):
+                        demander_confirmation(CLE_ADMIN, ("suspendre", u["id"], nom, True))
                         st.rerun()
 
 # ── Module Feedbacks ────────────────────────────────────────────
@@ -653,9 +790,10 @@ with modules[1]:
     try:
         feedbacks = histo.lister_feedback(150)
     except Exception as exc:
-        st.error(f"Impossible de charger les feedbacks : {exc}")
-        st.caption(
-            "Arrêtez Streamlit (Ctrl+C) puis relancez `streamlit run src/app/main.py`."
+        afficher_erreur(
+            "Les avis n'ont pas pu être chargés.",
+            exc,
+            "Actualisez le module ; si le problème persiste, redémarrez l'application.",
         )
         feedbacks = []
     if filtre == "Positifs":
@@ -742,64 +880,82 @@ with modules[3]:
         qd = stats_c.get("qdrant") or {}
         c3.metric("Points Qdrant", qd.get("points", "?"))
         if qd.get("erreur"):
-            st.warning(f"Qdrant : {qd['erreur']}")
+            afficher_avertissement(f"Qdrant : {qd['erreur']}.")
         else:
             st.caption(f"Collection : `{qd.get('collection', '?')}`")
         if stats_c.get("par_langage"):
             with st.expander("Chunks par langage"):
                 st.json(stats_c["par_langage"])
     except Exception as exc:
-        st.warning(str(exc))
+        afficher_avertissement(message_erreur("Statistiques du corpus indisponibles.", exc))
 
     st.markdown("#### Ajouter un document")
-    with st.form("admin_add_doc"):
+    with st.form("admin_add_doc", clear_on_submit=False):
         r1, r2 = st.columns(2)
         with r1:
             repo = st.text_input("Identifiant (owner/repo)", value="manuel/upload")
         with r2:
             src = st.text_input("Fichier source", value="notes.md")
-        texte = st.text_area("Contenu Markdown / texte", height=160)
-        if st.form_submit_button("Indexer maintenant", type="primary"):
-            ok, msg = admin_corpus.ajouter_document_texte(texte, repo, src)
+        texte = st.text_area(
+            "Contenu Markdown / texte",
+            height=160,
+            help="40 caractères minimum. Le texte est découpé, vectorisé puis indexé.",
+        )
+        indexer = st.form_submit_button("Indexer maintenant", type="primary")
+    if indexer:
+        if "/" not in (repo or "").strip():
+            afficher_erreur("L'identifiant doit être de la forme owner/repo.")
+        elif len((texte or "").strip()) < 40:
+            afficher_erreur("Le contenu est trop court (40 caractères minimum).")
+        else:
+            with st.spinner("Indexation en cours…"):
+                ok, msg = admin_corpus.ajouter_document_texte(texte, repo.strip(), src.strip())
             db.audit(admin["id"], "corpus_add", msg)
             if ok:
-                st.success(msg)
+                st.success(msg, icon=":material/check_circle:")
             else:
-                st.error(msg)
+                afficher_erreur(msg)
 
     st.markdown("#### Supprimer un dépôt")
     try:
         repos = admin_corpus.lister_repos_qdrant(120)
     except Exception as exc:
         repos = []
-        st.caption(str(exc))
+        st.caption(message_erreur("Liste Qdrant indisponible ; affichage de la liste locale.", exc))
     labels = [f"{r['nom_complet']} ({r['nb_points']})" for r in repos]
     if not labels:
         labels = admin_corpus.lister_repos_indexes()[:120]
     if labels:
         choix = st.selectbox("Dépôt", labels, key="corpus_del_sel")
         repo_del = choix.split(" (")[0] if " (" in choix else choix
-        if st.button("Supprimer de Qdrant", type="secondary"):
-            ok, msg = admin_corpus.supprimer_repo(repo_del)
-            db.audit(admin["id"], "corpus_delete", msg)
-            if ok:
-                st.toast(msg)
-            else:
-                st.error(msg)
+        if st.button(
+            "Supprimer de l'index…",
+            key="danger_corpus_del",
+            icon=":material/delete:",
+            help="Ouvre une confirmation",
+        ):
+            demander_confirmation(CLE_ADMIN, ("suppr_repo", repo_del, "", None))
             st.rerun()
     else:
         st.info("Aucun dépôt listé.")
 
     st.markdown("#### Ré-indexation")
-    recreer = st.checkbox("Recréer la collection (destructif)", key="admin_recreer")
-    if st.button("Lancer ré-indexation embeddings", type="primary"):
+    recreer = st.checkbox(
+        "Recréer la collection (destructif)",
+        key="admin_recreer",
+        help="Vide la collection avant de la reconstruire ; une confirmation sera demandée.",
+    )
+    if st.button("Lancer la ré-indexation", type="primary", key="admin_reindex"):
+        if recreer:
+            demander_confirmation(CLE_ADMIN, ("reindex", "recreer", "", None))
+            st.rerun()
         with st.spinner("Ré-indexation en cours…"):
-            ok, msg = admin_corpus.reindexer_collection(recreer=recreer)
+            ok, msg = admin_corpus.reindexer_collection(recreer=False)
         db.audit(admin["id"], "corpus_reindex", msg)
         if ok:
-            st.success(msg)
+            st.success(msg, icon=":material/check_circle:")
         else:
-            st.error(msg)
+            afficher_erreur(msg)
 
 # ── Module Paramètres IA ────────────────────────────────────────
 with modules[4]:
@@ -871,7 +1027,9 @@ with modules[4]:
                 "GitHub", min_value=1, max_value=5000, value=int(cfg.get("QUOTA_GITHUB_REQ", 200))
             )
 
-        if st.form_submit_button("Enregistrer les paramètres", type="primary"):
+        enregistrer_params = st.form_submit_button("Enregistrer les paramètres", type="primary")
+    if enregistrer_params:
+        try:
             runtime_config.sauvegarder(
                 {
                     "LLM_MODEL": modele.strip(),
@@ -887,9 +1045,12 @@ with modules[4]:
                     "QUOTA_GITHUB_REQ": int(q_gh),
                 }
             )
+        except Exception as exc:
+            afficher_erreur("Les paramètres n'ont pas pu être enregistrés.", exc)
+        else:
             db.audit(admin["id"], "runtime_config", "Paramètres IA mis à jour")
-            st.success(
-                "Paramètres enregistrés. Redémarrez Streamlit pour appliquer "
+            notifier(
+                "Paramètres enregistrés. Redémarrez l'application pour les appliquer "
                 "aux modules déjà chargés."
             )
             st.rerun()

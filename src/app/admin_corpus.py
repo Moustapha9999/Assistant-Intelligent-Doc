@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from collections import Counter
 from pathlib import Path
@@ -12,6 +13,14 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import config
+
+journal = logging.getLogger("assistdoc.corpus")
+
+
+def _echec(message: str, exc: BaseException) -> Tuple[bool, str]:
+    """Message affichable ; le détail technique reste dans le journal."""
+    journal.warning("%s (%s: %s)", message, type(exc).__name__, exc, exc_info=exc)
+    return False, f"{message} Consultez les journaux du serveur pour le détail."
 
 
 def _exiger_admin_streamlit() -> None:
@@ -66,7 +75,8 @@ def stats_corpus(chunks_path: str | Path | None = None) -> dict[str, Any]:
         if qdrant_info["points"] is None:
             qdrant_info["points"] = getattr(info, "points_count", "?")
     except Exception as exc:
-        qdrant_info = {"erreur": str(exc)}
+        journal.warning("Qdrant injoignable pour les statistiques : %s", exc)
+        qdrant_info = {"erreur": "base Qdrant injoignable"}
     return {
         "nombre_chunks": len(chunks),
         "nombre_repos": len(repos),
@@ -141,7 +151,7 @@ def supprimer_repo(nom_complet: str) -> Tuple[bool, str]:
             ),
         )
     except Exception as exc:
-        return False, f"Erreur Qdrant : {exc}"
+        return _echec("La suppression dans Qdrant a échoué.", exc)
 
     # Nettoyage optionnel du fichier chunks
     chunks_path = Path(config.CHUNKS_FILE)
@@ -243,7 +253,7 @@ def ajouter_document_texte(
         )
         return True, f"{len(points)} chunk(s) indexé(s) pour « {nom_complet} »."
     except Exception as exc:
-        return False, f"Échec indexation : {exc}"
+        return _echec("L'indexation du document a échoué.", exc)
 
 
 def reindexer_collection(recreer: bool = False) -> Tuple[bool, str]:
@@ -251,9 +261,10 @@ def reindexer_collection(recreer: bool = False) -> Tuple[bool, str]:
     _exiger_admin_streamlit()
     emb = Path(config.EMBEDDINGS_FILE)
     if not emb.exists():
+        journal.warning("Fichier d'embeddings introuvable : %s", emb)
         return (
             False,
-            f"Fichier embeddings introuvable ({emb}). "
+            "Fichier d'embeddings introuvable. "
             "Lancez d'abord : python scripts/indexer_corpus.py",
         )
     try:
@@ -261,6 +272,8 @@ def reindexer_collection(recreer: bool = False) -> Tuple[bool, str]:
 
         g = GestionnaireQdrant()
         g.indexer_chunks(fichier_embeddings=emb, recreer=recreer)
-        return True, f"Ré-indexation terminée (recreer={recreer})."
+        return True, (
+            "Ré-indexation terminée (collection recréée)." if recreer else "Ré-indexation terminée."
+        )
     except Exception as exc:
-        return False, f"Échec ré-indexation : {exc}"
+        return _echec("La ré-indexation a échoué.", exc)
