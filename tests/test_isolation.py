@@ -13,7 +13,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from app.export_conversation import exporter_conversation
 from app.favoris_sqlite import FavorisSQLite
 from app.historique_sqlite import HistoriqueSQLite
-from app.identite import Identite, fermer_session, ouvrir_session_compte, resoudre_identite, script_cookie
+from app.identite import (
+    Identite,
+    choisir_session,
+    fermer_session,
+    ouvrir_session_compte,
+    resoudre_identite,
+)
 from app.utilisateurs_sqlite import UtilisateursSQLite, empreinte_jeton
 from core.memoire_longue import MemoireLongue
 from securite.acces import AccesRefuse, VueProprietaire
@@ -377,10 +383,36 @@ def test_api_feedback_isolation(tmp_path, monkeypatch):
 # ── Cookie navigateur ───────────────────────────────────────────────────────
 
 
-def test_script_cookie_attributs_et_echappement():
-    js = script_cookie("ancien", 'nouveau"</script>', 3600)
-    assert "SameSite=Lax" in js and "Max-Age=" in js and "Secure" in js and "Path=/" in js
-    assert js.count("</script>") == 1  # la valeur ne peut pas fermer la balise
+def test_identite_provisoire_remplacee_par_le_cookie_valide(bases):
+    users, _, _ = bases
+    existant, cookie = _navigateur(users)
+
+    # 1er passage : cookie pas encore transmis → invité provisoire (jamais écrit dans le cookie)
+    prov, jeton_prov, provisoire = choisir_session(users, None, False, "", False)
+    assert provisoire and prov["id"] != existant["id"]
+
+    # 2e passage : le navigateur transmet son cookie valide → on l'adopte
+    user, jeton, provisoire = choisir_session(users, jeton_prov, True, cookie, True)
+    assert not provisoire and user["id"] == existant["id"] and jeton == cookie
+    assert users.valider_session(jeton_prov) is None
+
+
+def test_identite_provisoire_confirmee_si_aucun_cookie(bases):
+    users, _, _ = bases
+    prov, jeton_prov, provisoire = choisir_session(users, None, False, "", False)
+    assert provisoire
+    user, jeton, provisoire = choisir_session(users, jeton_prov, True, "", True)
+    assert not provisoire and jeton == jeton_prov and user["id"] == prov["id"]
+    # Stable ensuite (aucune boucle) : mêmes entrées → même identité
+    assert choisir_session(users, jeton, False, jeton, True)[1] == jeton
+
+
+def test_session_confirmee_non_remplacee_par_un_autre_cookie(bases):
+    users, _, _ = bases
+    a, jeton_a = _navigateur(users)
+    _, jeton_b = _navigateur(users)
+    user, jeton, _ = choisir_session(users, jeton_a, False, jeton_b, True)
+    assert user["id"] == a["id"] and jeton == jeton_a
 
 
 def test_identite_statut():

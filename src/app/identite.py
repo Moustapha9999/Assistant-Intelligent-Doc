@@ -11,15 +11,15 @@ Règles :
 - déconnexion : jeton révoqué, nouvelle identité invitée distincte ;
 - aucune fusion automatique entre invité et compte, ni entre deux comptes.
 
-Le cookie est écrit par JavaScript (Streamlit ne sait pas poser d'en-tête Set-Cookie) :
-il ne peut donc pas être HttpOnly. Il est `Secure` (HTTPS), `SameSite=Lax`, à durée limitée,
+Le cookie est lu et écrit par un composant JavaScript (Streamlit ne sait pas poser d'en-tête
+Set-Cookie, et Streamlit Cloud ne transmet pas toujours les cookies au serveur) : il ne peut donc
+pas être HttpOnly. Aucun rechargement de page n'est utilisé. Il est `Secure` (HTTPS), `SameSite=Lax`, à durée limitée,
 et ne contient aucune donnée personnelle. Sans cookie (navigateur qui les bloque), l'isolation
 reste garantie : chaque session Streamlit obtient simplement sa propre identité invitée.
 """
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 
@@ -58,23 +58,48 @@ class Identite:
 # ── Logique pure (testable sans Streamlit) ───────────────────────────────────
 
 
+def choisir_session(
+    db: UtilisateursSQLite,
+    jeton_session: Optional[str],
+    provisoire: bool,
+    jeton_cookie: Optional[str],
+    cookie_connu: bool,
+) -> Tuple[Dict[str, Any], str, bool]:
+    """Retourne (utilisateur, jeton, provisoire).
+
+    - jeton déjà confirmé pour cette session Streamlit et toujours valide : conservé ;
+    - sinon jeton du cookie navigateur s'il est valide (remplace une identité provisoire) ;
+    - sinon jeton de session existant, ou nouvelle identité invitée unique.
+
+    Une identité est « provisoire » tant que le navigateur n'a pas encore transmis son cookie :
+    elle ne doit pas être écrite dans le cookie, pour ne pas écraser une session valide.
+    """
+    if jeton_session and not provisoire:
+        user = db.valider_session(jeton_session)
+        if user:
+            return user, jeton_session, False
+    if jeton_cookie and jeton_cookie != jeton_session:
+        user = db.valider_session(jeton_cookie)
+        if user:
+            if jeton_session and provisoire:
+                db.revoquer_session(jeton_session)
+            return user, jeton_cookie, False
+    if jeton_session:
+        user = db.valider_session(jeton_session)
+        if user:
+            return user, jeton_session, provisoire and not cookie_connu
+    invite = db.creer_invite("Invité")
+    return invite, db.creer_session(invite["id"]), not cookie_connu
+
+
 def resoudre_identite(
     db: UtilisateursSQLite,
     jeton_session: Optional[str],
     jeton_cookie: Optional[str],
 ) -> Tuple[Dict[str, Any], str, bool]:
-    """Retourne (utilisateur, jeton, nouvelle_identite).
-
-    Ordre : jeton déjà associé à la session Streamlit, puis jeton du cookie navigateur ;
-    à défaut, création d'une identité invitée unique.
-    """
-    for jeton in (jeton_session, jeton_cookie):
-        if jeton:
-            user = db.valider_session(jeton)
-            if user:
-                return user, jeton, False
-    invite = db.creer_invite("Invité")
-    return invite, db.creer_session(invite["id"]), True
+    """Retourne (utilisateur, jeton, nouvelle_identite) quand le cookie est connu."""
+    user, jeton, _ = choisir_session(db, jeton_session, False, jeton_cookie, True)
+    return user, jeton, jeton not in (jeton_session, jeton_cookie)
 
 
 def ouvrir_session_compte(
@@ -94,6 +119,28 @@ def fermer_session(db: UtilisateursSQLite, jeton: Optional[str]) -> Tuple[Dict[s
 
 # ── Intégration Streamlit ────────────────────────────────────────────────────
 
+CLE_COMPOSANT = "_assistdoc_cookie"
+
+# Composant v2 (non isolé dans une iframe) : lit le cookie du document de l'application,
+# le transmet au serveur, et écrit le jeton confirmé. Aucun rechargement de page.
+_JS_COOKIE = """
+export default function(component) {
+  const { data, setStateValue } = component;
+  const lire = () => {
+    const m = document.cookie.match(/(?:^|; )assistdoc_sid=([^;]*)/);
+    return m ? decodeURIComponent(m[1]) : "";
+  };
+  if (data && data.nouveau) {
+    const secure = window.location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = "assistdoc_sid=" + encodeURIComponent(data.nouveau)
+      + "; Max-Age=" + data.age + "; Path=/; SameSite=Lax" + secure;
+  }
+  setStateValue("cookie", lire());
+}
+"""
+
+_composant_cookie = None
+
 
 def _st():
     import streamlit as st
@@ -111,21 +158,30 @@ def users_db() -> UtilisateursSQLite:
     return _instance()
 
 
-def _cookie_navigateur() -> str:
+def _cookie_contexte() -> str:
     try:
         return (_st().context.cookies.get(NOM_COOKIE) or "").strip()
     except Exception:
         return ""
 
 
-def _appliquer(user: Dict[str, Any], jeton: str) -> Identite:
+def _cookie_composant() -> Optional[str]:
+    """Valeur transmise par le navigateur ; None tant qu'elle n'est pas encore connue."""
+    etat = _st().session_state.get(CLE_COMPOSANT)
+    try:
+        valeur = etat.get("cookie") if etat is not None else None
+    except Exception:
+        return None
+    return None if valeur is None else str(valeur).strip()
+
+
+def _appliquer(user: Dict[str, Any], jeton: str, provisoire: bool = False) -> Identite:
     st = _st()
-    precedent = st.session_state.get("_jeton_session")
-    if jeton != precedent:
-        # Paire (valeur attendue dans le navigateur, nouvelle valeur) pour le script cookie
-        ancien = precedent if precedent else _cookie_navigateur()
-        st.session_state["_cookie_paire"] = (ancien, jeton, int(duree_session(user.get("tier")).total_seconds()))
     st.session_state["_jeton_session"] = jeton
+    st.session_state["_jeton_provisoire"] = provisoire
+    st.session_state["_cookie_a_ecrire"] = (
+        None if provisoire else (jeton, int(duree_session(user.get("tier")).total_seconds()))
+    )
     st.session_state.auth_ok = True
     st.session_state.auth_user_id = user["id"]
     st.session_state.auth_user = (
@@ -138,10 +194,16 @@ def _appliquer(user: Dict[str, Any], jeton: str) -> Identite:
 def identite_courante() -> Identite:
     """Identité validée côté serveur pour la session Streamlit en cours (à appeler à chaque run)."""
     st = _st()
-    user, jeton, _ = resoudre_identite(
-        users_db(), st.session_state.get("_jeton_session"), _cookie_navigateur()
+    contexte = _cookie_contexte()
+    composant = _cookie_composant()
+    user, jeton, provisoire = choisir_session(
+        users_db(),
+        st.session_state.get("_jeton_session"),
+        bool(st.session_state.get("_jeton_provisoire")),
+        contexte or composant or "",
+        bool(contexte) or composant is not None,
     )
-    return _appliquer(user, jeton)
+    return _appliquer(user, jeton, provisoire)
 
 
 def identite_session() -> Identite:
@@ -173,45 +235,12 @@ def jeton_session_courant() -> Optional[str]:
     return _st().session_state.get("_jeton_session")
 
 
-def script_cookie(ancien: str, nouveau: str, max_age: int) -> str:
-    """JavaScript qui synchronise le cookie du navigateur avec la session serveur.
-
-    - cookie déjà remplacé par un autre onglet (ni l'ancien ni le nouveau jeton) : on recharge
-      pour adopter la session la plus récente au lieu de l'écraser ;
-    - sinon on écrit le nouveau jeton (et on renouvelle sa durée).
-    """
-    params = json.dumps(
-        {"nom": NOM_COOKIE, "ancien": ancien or "", "nouveau": nouveau, "age": int(max_age)}
-    ).replace("<", "\\u003c")
-    return f"""
-<script>
-(function() {{
-  const p = {params};
-  try {{
-    const doc = window.parent.document;
-    const m = doc.cookie.match(new RegExp('(?:^|; )' + p.nom + '=([^;]*)'));
-    const actuel = m ? decodeURIComponent(m[1]) : "";
-    if (actuel && actuel !== p.ancien && actuel !== p.nouveau) {{
-      window.parent.location.reload();
-      return;
-    }}
-    const secure = window.parent.location.protocol === "https:" ? "; Secure" : "";
-    doc.cookie = p.nom + "=" + encodeURIComponent(p.nouveau) + "; Max-Age=" + p.age
-      + "; Path=/; SameSite=Lax" + secure;
-  }} catch (e) {{}}
-}})();
-</script>
-"""
-
-
 def synchroniser_cookie() -> None:
-    """À appeler à chaque run (après identite_courante) : le composant est stable tant que
-    la paire ne change pas, donc le script ne s'exécute qu'une fois par changement de jeton."""
+    """À appeler une fois par run, après identite_courante()."""
+    global _composant_cookie
     st = _st()
-    paire = st.session_state.get("_cookie_paire")
-    if not paire:
-        return
-    import streamlit.components.v1 as components
-
-    ancien, nouveau, age = paire
-    components.html(script_cookie(ancien, nouveau, age), height=0)
+    if _composant_cookie is None:
+        _composant_cookie = st.components.v2.component("assistdoc_session", js=_JS_COOKIE)
+    a_ecrire = st.session_state.get("_cookie_a_ecrire")
+    data = {"nouveau": a_ecrire[0], "age": a_ecrire[1]} if a_ecrire else {}
+    _composant_cookie(key=CLE_COMPOSANT, data=data, on_cookie_change=lambda: None)
