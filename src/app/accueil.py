@@ -174,21 +174,20 @@ section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
     padding-top: 0 !important;
     margin-top: 0 !important;
 }
-.sb-export-box {
+.st-key-sb_export_box {
     margin: 6px 0 4px 0;
-    padding: 8px 10px 6px;
+    padding: 8px 10px 10px;
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 12px;
     background: rgba(255,255,255,0.03);
+    gap: 8px !important;
+}
+.st-key-sb_export_box [data-testid="stMarkdownContainer"] {
+    margin-bottom: 0 !important;
 }
 .sb-export-title {
     font-size: 11px; font-weight: 600; color: var(--text-dim);
     letter-spacing: 0.04em; text-transform: uppercase;
-    margin-bottom: 4px;
-}
-.sb-export-hint {
-    font-size: 11px; color: var(--text-muted); line-height: 1.35;
-    margin-bottom: 8px;
 }
 .sb-promo {
     margin: 8px 0 10px 0;
@@ -390,6 +389,49 @@ section.main:has(.thinking-stage) .web-on {
     font-family: 'Inter', sans-serif !important;
     font-size: 15px !important;
     font-weight: 500 !important;
+    flex: 0 1 auto !important;
+    width: fit-content !important;
+    min-width: 0 !important;
+    margin-left: auto !important;
+}
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageContent"] [data-testid="stVerticalBlock"],
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageContent"] [data-testid="stElementContainer"] {
+    width: auto !important;
+    gap: 2px !important;
+}
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageContent"] p:last-child {
+    margin-bottom: 0 !important;
+}
+
+/* Barre d'actions sous un message : copier / modifier / pouce haut / pouce bas */
+div[class*="st-key-tbrow_"] {
+    gap: 0 !important;
+    margin: 2px 0 0 0 !important;
+}
+div[class*="st-key-tbrow_"] [data-testid="stElementContainer"] {
+    width: auto !important;
+    flex: 0 0 auto !important;
+}
+div[class*="st-key-tbrow_"] iframe {
+    width: 60px !important;
+    display: block;
+}
+div[class*="st-key-tbrow_"] .stButton button {
+    width: 28px !important; height: 28px !important;
+    min-height: 28px !important; min-width: 28px !important;
+    padding: 0 !important; margin: 0 !important;
+    border: none !important; border-radius: 8px !important;
+    background: transparent !important;
+    color: #b0aea5 !important;
+    justify-content: center !important;
+}
+div[class*="st-key-tbrow_"] .stButton button:hover:not(:disabled) {
+    background: rgba(255,255,255,0.08) !important;
+    color: #f5f4ef !important;
+}
+div[class*="st-key-tbrow_"] .stButton button [data-testid="stIconMaterial"] {
+    font-size: 16px !important;
+    margin: 0 !important;
 }
 
 /* IA → gauche */
@@ -1639,6 +1681,22 @@ def _afficher_actions_message(msg_idx: int, contenu: str, role: str) -> None:
     dis_attr = "disabled" if figee else ""
 
     # Copier / éditer en HTML ; 👍/👎 en boutons Streamlit (fiable → Admin)
+    rangee = st.container(
+        horizontal=True,
+        gap=None,
+        vertical_alignment="center",
+        horizontal_alignment="right" if role == "user" else "left",
+        key=f"tbrow_{safe}",
+    )
+    with rangee:
+        _toolbar_html(safe, align, ico_copy, edit_svg, edit_title, dis_attr, ico_ok, js_texte, figee, msg_idx)
+        if role == "assistant":
+            _boutons_feedback(msg_idx, safe)
+
+    _edition_inline(msg_idx, contenu, role, en_edition, figee)
+
+
+def _toolbar_html(safe, align, ico_copy, edit_svg, edit_title, dis_attr, ico_ok, js_texte, figee, msg_idx) -> None:
     components.html(
         f"""
         <style>
@@ -1722,43 +1780,38 @@ def _afficher_actions_message(msg_idx: int, contenu: str, role: str) -> None:
         }})();
         </script>
         """,
+        width=60,
         height=30,
     )
 
-    if role == "assistant":
-        deja = st.session_state.setdefault("feedback_envoye", [])
-        if not isinstance(deja, list):
-            deja = list(deja)
-            st.session_state.feedback_envoye = deja
-        fb_key = f"{st.session_state.conversation_id}:{msg_idx}"
-        c_up, c_dn, _ = st.columns([1, 1, 12])
-        with c_up:
-            if st.button(
-                "👍",
-                key=f"fb_up_{safe}",
-                help="Utile — visible dans Admin",
-                disabled=fb_key in deja,
-            ):
-                if _enregistrer_feedback_msg(msg_idx, 1):
-                    deja.append(fb_key)
-                    notifier("Merci, votre avis a été enregistré.")
-                    st.rerun()
-                else:
-                    st.toast("Votre avis n'a pas pu être enregistré.", icon=":material/error:")
-        with c_dn:
-            if st.button(
-                "👎",
-                key=f"fb_dn_{safe}",
-                help="Pas utile — visible dans Admin",
-                disabled=fb_key in deja,
-            ):
-                if _enregistrer_feedback_msg(msg_idx, -1):
-                    deja.append(fb_key)
-                    notifier("Merci, votre avis a été enregistré.")
-                    st.rerun()
-                else:
-                    st.toast("Votre avis n'a pas pu être enregistré.", icon=":material/error:")
 
+def _boutons_feedback(msg_idx: int, safe: str) -> None:
+    deja = st.session_state.setdefault("feedback_envoye", [])
+    if not isinstance(deja, list):
+        deja = list(deja)
+        st.session_state.feedback_envoye = deja
+    fb_key = f"{st.session_state.conversation_id}:{msg_idx}"
+    for note, icone, aide, cle in (
+        (1, ":material/thumb_up:", "Utile — visible dans Admin", f"fb_up_{safe}"),
+        (-1, ":material/thumb_down:", "Pas utile — visible dans Admin", f"fb_dn_{safe}"),
+    ):
+        if st.button(
+            "",
+            icon=icone,
+            key=cle,
+            help=aide,
+            type="tertiary",
+            disabled=fb_key in deja,
+        ):
+            if _enregistrer_feedback_msg(msg_idx, note):
+                deja.append(fb_key)
+                notifier("Merci, votre avis a été enregistré.")
+                st.rerun()
+            else:
+                st.toast("Votre avis n'a pas pu être enregistré.", icon=":material/error:")
+
+
+def _edition_inline(msg_idx: int, contenu: str, role: str, en_edition: bool, figee: bool) -> None:
     if en_edition and not figee:
         nouveau = st.text_area(
             "Éditer le message",
@@ -1994,24 +2047,15 @@ with st.sidebar:
     if st.session_state.messages:
         titre_export = _titre_discussion(st.session_state.messages)
         cid = st.session_state.conversation_id
-        st.markdown(
-            """
-            <div class="sb-export-box">
-              <div class="sb-export-title">Exporter</div>
-              <div class="sb-export-hint">
-                Document structuré : résumé, questions / réponses numérotées et sources.
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
         md = export_markdown(
             st.session_state.messages,
             conversation_id=cid,
             titre=titre_export,
         )
         safe_name = re.sub(r"[^\w\-]+", "_", titre_export)[:40].strip("_") or "conversation"
-        c_md, c_pdf = st.columns(2)
+        boite_export = st.container(key="sb_export_box")
+        boite_export.markdown('<div class="sb-export-title">Exporter</div>', unsafe_allow_html=True)
+        c_md, c_pdf = boite_export.columns(2, gap="small")
         with c_md:
             st.download_button(
                 ".md",
