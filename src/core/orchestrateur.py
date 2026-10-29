@@ -14,6 +14,7 @@ from core.journal_amelioration import JournalAmelioration
 from core.memoire_longue import MemoireLongue
 from core.memoire_projet import MemoireProjet
 from core.memoire_reponse import MemoireReponse
+from core.nettoyage_reponse import nettoyer_reponse
 from core.schemas import AnalyseQuestion, ResultatOrchestration
 from core.planificateur import PlanificateurAssistant
 from generation.llm_client import LLMClient
@@ -291,7 +292,7 @@ class OrchestrateurAssistant:
                     rapport = self.controleur_qualite.verifier(texte, analyse, plan, question=question)
                 except Exception:
                     rapport = None
-                resultat.reponse_seule = texte.strip()
+                resultat.reponse_seule = nettoyer_reponse(texte)
                 resultat.rapport_qualite = rapport
                 resultat.meta_journal["score_qualite"] = getattr(rapport, "score", None)
                 resultat.meta_journal["qualite_valide"] = getattr(rapport, "valide", None)
@@ -376,7 +377,8 @@ class OrchestrateurAssistant:
                 f"{rapport.commentaire} (régénération×{tentatives})"
             ).strip()
 
-        reponse_complete = reponse.strip()
+        reponse = nettoyer_reponse(reponse)
+        reponse_complete = reponse
         if citations and "📚" not in reponse_complete and "🌐" not in reponse_complete:
             reponse_complete += "\n\n---\n\n" + citations
 

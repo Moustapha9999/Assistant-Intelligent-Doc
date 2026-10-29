@@ -8,10 +8,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 @pytest.fixture(autouse=True)
 def _isoler_etat_partage(tmp_path, monkeypatch):
-    """Aucun test n'écrit dans data/app : paramètres Admin et journal de l'API en dossier temporaire."""
+    """Aucun test n'écrit dans data/app : paramètres Admin et journal de l'API en dossier temporaire.
+    `runtime_config.sauvegarder` modifie aussi os.environ : l'environnement est restauré après chaque test."""
+    import os
+
     from app import runtime_config
 
+    environ = dict(os.environ)
     monkeypatch.setattr(runtime_config, "RUNTIME_FILE", tmp_path / "runtime_ia.json")
+    yield
+    os.environ.clear()
+    os.environ.update(environ)
+
+
+@pytest.fixture(autouse=True)
+def _isoler_journal_api(tmp_path, monkeypatch):
     try:
         import api.auth as api_auth
     except ImportError:

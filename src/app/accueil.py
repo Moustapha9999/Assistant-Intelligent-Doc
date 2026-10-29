@@ -37,6 +37,7 @@ from app.identite import identite_session
 from app.ui_composants import (
     afficher_avertissement,
     afficher_erreur,
+    afficher_flux,
     annuler_confirmation,
     confirmation_en_attente,
     demander_confirmation,
@@ -56,11 +57,13 @@ from app.auth_basique import (
     est_admin_session,
     est_compte_connecte,
     exiger_auth,
+    ouvrir_connexion,
     users_db as _users_db_auth,
     utilisateur_courant,
     utilisateur_session,
 )
 from securite.injection import LIBELLES as _LIBELLES_INJECTION, detecter as detecter_injection
+from core.nettoyage_reponse import nettoyer_reponse
 from app import export_conversation as _export_conversation
 
 importlib.reload(_export_conversation)
@@ -1786,8 +1789,7 @@ def afficher_sources(docs: list, msg_idx: int = 0):
                     key=f"fav_btn_{msg_idx}_{i}",
                     use_container_width=True,
                 ):
-                    st.session_state.show_auth_dialog = True
-                    st.session_state.auth_email_step = "email"
+                    ouvrir_connexion()
                     notifier("Connectez-vous pour enregistrer un favori.", "info")
                     st.rerun()
             else:
@@ -2416,8 +2418,7 @@ with st.sidebar:
                 unsafe_allow_html=True,
             )
             if st.button("Se connecter", key="sb_login", use_container_width=True):
-                st.session_state.show_auth_dialog = True
-                st.session_state.auth_email_step = "email"
+                ouvrir_connexion()
                 st.rerun()
         else:
             if st.button(
@@ -2465,7 +2466,7 @@ _traiter_actions_url()
 
 # Suggestion cliquée : démarrer tout de suite (évite le flash des chips d'accueil)
 _pending_sug = (st.session_state.pop("_sug", None) or "").strip()
-if _pending_sug and not st.session_state.en_cours and not st.session_state.get("force_login"):
+if _pending_sug and not st.session_state.en_cours:
     st.session_state.messages.append({
         "role": "user",
         "content": _pending_sug,
@@ -2558,7 +2559,7 @@ with col:
                 score_rag_msg = msg.get("score_rag")
 
                 with st.chat_message("assistant", avatar="assistant"):
-                    st.markdown(msg["content"])
+                    st.markdown(nettoyer_reponse(msg["content"]))
                     for img in msg.get("images") or []:
                         b64 = img.get("b64")
                         if not b64:
@@ -2713,8 +2714,8 @@ def _transcrire(audio) -> str:
 
 
 connecte = est_compte_connecte()
-bloque_invite = bool(st.session_state.get("force_login"))
-composer_occupe = bloque_invite or st.session_state.en_cours
+# Quota épuisé : la saisie reste possible, le serveur refuse la requête et propose la connexion
+composer_occupe = st.session_state.en_cours
 
 with col:
     web_actif = bool(st.session_state.web_search_actif)
@@ -2739,14 +2740,11 @@ with col:
                 type="tertiary",
                 help="Fichiers, images et audio réservés aux comptes connectés",
             ):
-                st.session_state.show_auth_dialog = True
-                st.session_state.auth_email_step = "email"
+                ouvrir_connexion()
                 st.rerun()
 
     saisie = st.chat_input(
-        "Réflexion en cours…"
-        if st.session_state.en_cours
-        else ("Connectez-vous pour continuer…" if bloque_invite else "Poser une question…"),
+        "Réflexion en cours…" if st.session_state.en_cours else "Poser une question…",
         key=f"composer_{st.session_state.input_key}",
         accept_file="multiple" if connecte else False,
         # Les formats refusés restent sélectionnables : traiter_fichier() explique le refus au lieu d'un rejet muet
@@ -2824,10 +2822,17 @@ if st.session_state.en_cours and st.session_state.messages:
 
     try:
         t0 = time.time()
-        ok_quota, msg_quota = consommer_requete(
-            {"question": (q or "")[:200], "avec_fichier": a_un_fichier}
-        )
+        # Un rerun pendant la génération (clic, fragment) ne doit pas décompter la question deux fois
+        if dernier_user.get("quota_decompte"):
+            ok_quota, msg_quota = True, ""
+        else:
+            ok_quota, msg_quota = consommer_requete(
+                {"question": (q or "")[:200], "avec_fichier": a_un_fichier}
+            )
+            dernier_user["quota_decompte"] = ok_quota
         if not ok_quota:
+            if st.session_state.historique_llm and st.session_state.historique_llm[-1].get("role") == "user":
+                st.session_state.historique_llm.pop()
             st.session_state.messages.append({
                 "role": "assistant",
                 "content": f"⏳ {msg_quota}",
@@ -2918,7 +2923,7 @@ if st.session_state.en_cours and st.session_state.messages:
                 gauche, _ = st.columns([5, 2])
                 with gauche:
                     with st.chat_message("assistant", avatar="assistant"):
-                        reponse_txt = st.write_stream(flux)
+                        reponse_txt = afficher_flux(flux)
                 # Journal après stream : contrôle qualité a posteriori, sans régénération
                 try:
                     holder = resultat.usage_holder or {}
@@ -2939,7 +2944,7 @@ if st.session_state.en_cours and st.session_state.messages:
                 except Exception:
                     pass
             else:
-                reponse_txt = resultat.reponse_seule or resultat.reponse or ""
+                reponse_txt = nettoyer_reponse(resultat.reponse_seule or resultat.reponse or "")
             if str(reponse_txt or "").startswith("❌ Erreur"):
                 _journal_securite("ia_erreur", "faible", str(reponse_txt)[:200])
 

@@ -1030,7 +1030,7 @@ with modules[4]:
         q1, q2, q3 = st.columns(3)
         with q1:
             q_guest = st.number_input(
-                "Invité", min_value=1, max_value=500, value=int(cfg.get("QUOTA_GUEST_REQ", 12))
+                "Invité", min_value=1, max_value=500, value=int(cfg.get("QUOTA_GUEST_REQ", 5))
             )
         with q2:
             q_email = st.number_input(

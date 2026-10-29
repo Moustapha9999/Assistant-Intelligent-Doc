@@ -8,6 +8,7 @@ from typing import Dict, List, Optional
 from core.gestionnaire_modes import obtenir_mode
 from core.schemas import AnalyseQuestion, PlanReponse
 from retrieval.contexte import resume_contexte_global
+from core.nettoyage_reponse import REGLE_FORMAT
 from securite.injection import REGLE_SYSTEME, encadrer
 from web.ressources import sources_web_reelles
 
@@ -56,6 +57,7 @@ class ConstructeurPrompt:
                 prefs_txt,
                 prefs_lt,
                 insights,
+                REGLE_FORMAT,
                 REGLE_SYSTEME,
             ]
             if bloc and bloc.strip()

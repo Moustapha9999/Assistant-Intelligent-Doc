@@ -54,6 +54,10 @@ MSG_BLOCAGE = "Trop de tentatives de connexion. Réessayez dans quelques minutes
 MSG_MFA_INVALIDE = "Code de vérification invalide ou déjà utilisé."
 MSG_MFA_BLOCAGE = "Trop de codes invalides. Réessayez dans quelques minutes."
 MSG_INVITES_SATURE = "L'accès invité est momentanément saturé. Connectez-vous pour continuer."
+MSG_QUOTA_INVITE = (
+    "Vous avez atteint votre limite de {n} requêtes gratuites pour aujourd'hui. "
+    "Connectez-vous pour continuer à utiliser l'assistant."
+)
 MSG_SESSION_INVALIDE = "Session expirée ou invalide. Reconnectez-vous."
 MSG_MDP_ACTUEL = "Mot de passe actuel incorrect."
 MSG_MDP_BLOCAGE = "Trop de tentatives. Réessayez dans quelques minutes."
@@ -914,28 +918,33 @@ class UtilisateursSQLite:
                 ),
             )
 
+    @staticmethod
+    def _requetes_jour(conn: sqlite3.Connection, user_id: str) -> int:
+        """Requêtes depuis minuit UTC (renouvellement quotidien du quota)."""
+        debut = _maintenant().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        return int(conn.execute(
+            "SELECT COUNT(*) AS n FROM usage_events WHERE user_id = ? AND kind = 'ask' AND cree_le >= ?",
+            (user_id, debut),
+        ).fetchone()["n"])
+
+    @staticmethod
+    def _requetes_invites_heure(conn: sqlite3.Connection) -> int:
+        depuis = (_maintenant() - timedelta(hours=1)).isoformat()
+        return int(conn.execute(
+            "SELECT COUNT(*) AS n FROM usage_events e JOIN users u ON u.id = e.user_id "
+            "WHERE e.kind = 'ask' AND u.tier = 'guest' AND e.cree_le >= ?",
+            (depuis,),
+        ).fetchone()["n"])
+
     def compter_requetes_jour(self, user_id: str) -> int:
-        debut = datetime.now(timezone.utc).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        ).isoformat()
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT COUNT(*) AS n FROM usage_events "
-                "WHERE user_id = ? AND kind = 'ask' AND cree_le >= ?",
-                (user_id, debut),
-            ).fetchone()
-        return int(row["n"] if row else 0)
+        with lecture(self.chemin) as conn:
+            return self._requetes_jour(conn, user_id)
 
     def requetes_invites_derniere_heure(self) -> int:
-        depuis = (_maintenant() - timedelta(hours=1)).isoformat()
         with lecture(self.chemin) as conn:
-            return int(conn.execute(
-                "SELECT COUNT(*) AS n FROM usage_events e JOIN users u ON u.id = e.user_id "
-                "WHERE e.kind = 'ask' AND u.tier = 'guest' AND e.cree_le >= ?",
-                (depuis,),
-            ).fetchone()["n"])
+            return self._requetes_invites_heure(conn)
 
-    def verifier_quota(self, user: Dict[str, Any]) -> Tuple[bool, str]:
+    def _controle_quota(self, conn: sqlite3.Connection, user: Dict[str, Any]) -> Tuple[bool, str]:
         if not user:
             return False, "Non connecté."
         if user.get("suspended"):
@@ -946,17 +955,38 @@ class UtilisateursSQLite:
             return True, "Illimité (admin)."
         if tier == "guest":
             plafond = politique.valeur("QUOTA_INVITES_GLOBAL_HEURE")
-            if plafond and self.requetes_invites_derniere_heure() >= plafond:
+            if plafond and self._requetes_invites_heure(conn) >= plafond:
                 return False, MSG_INVITES_SATURE
-        n = self.compter_requetes_jour(user["id"])
+        n = self._requetes_jour(conn, user["id"])
         if n >= q.requetes_par_jour:
+            if tier == "guest":
+                return False, MSG_QUOTA_INVITE.format(n=q.requetes_par_jour)
             return (
                 False,
                 f"Quota atteint ({n}/{q.requetes_par_jour} requêtes/jour pour {q.label}). "
-                "Créez un compte email ou connectez GitHub pour plus d'usage.",
+                "Réessayez demain.",
             )
         reste = q.requetes_par_jour - n
         return True, f"{reste} requête(s) restante(s) aujourd'hui ({q.label})."
+
+    def verifier_quota(self, user: Dict[str, Any]) -> Tuple[bool, str]:
+        """Consultation seule (aucune requête n'est décomptée)."""
+        with lecture(self.chemin) as conn:
+            return self._controle_quota(conn, user)
+
+    def reserver_requete(
+        self, user: Dict[str, Any], meta: Optional[Dict] = None
+    ) -> Tuple[bool, str]:
+        """Contrôle du quota et décompte de la requête dans une même transaction exclusive :
+        des requêtes simultanées ne peuvent pas dépasser la limite."""
+        with ecriture(self.chemin) as conn:
+            ok, msg = self._controle_quota(conn, user)
+            if ok:
+                conn.execute(
+                    "INSERT INTO usage_events (user_id, kind, meta_json, cree_le) VALUES (?, 'ask', ?, ?)",
+                    (user["id"], json.dumps(meta or {}, ensure_ascii=False), _utc_now()),
+                )
+        return ok, msg
 
     def stats_globales(self) -> Dict[str, Any]:
         with self._connect() as conn:

@@ -41,7 +41,7 @@ from app.auth_google import (
 from app import identite as _identite
 from app.quotas import quota_pour
 from app.ui_composants import afficher_erreur, journal, notifier
-from app.utilisateurs_sqlite import MSG_INVITES_SATURE
+from app.utilisateurs_sqlite import MSG_INVITES_SATURE, MSG_QUOTA_INVITE
 
 users_db = _identite.users_db
 _users_db = users_db
@@ -457,10 +457,7 @@ def _contenu_modal_auth(
         )
 
     if force:
-        st.caption(
-            f"Limite invité atteinte ({quota_pour('guest').requetes_par_jour} prompts/jour). "
-            "Connectez-vous pour continuer."
-        )
+        st.caption(MSG_QUOTA_INVITE.format(n=quota_pour("guest").requetes_par_jour))
 
     st.markdown(
         '<p class="auth-sub">Vous recevrez des réponses plus intelligentes et pourrez '
@@ -616,7 +613,21 @@ def _contenu_modal_auth(
                 afficher_erreur(msg)
 
 
-@st.dialog("Connectez-vous ou inscrivez-vous")
+def ouvrir_connexion(quota_atteint: bool = False) -> None:
+    """Seuls déclencheurs : un clic de l'utilisateur ou une requête refusée pour quota."""
+    st.session_state.show_auth_dialog = True
+    st.session_state.auth_email_step = "email"
+    if quota_atteint:
+        st.session_state.force_login = True
+
+
+def fermer_connexion() -> None:
+    """Fermeture (croix, Échap, clic extérieur) : la boîte ne se rouvre qu'à la prochaine action."""
+    for cle in ("show_auth_dialog", "force_login", CLE_MFA):
+        st.session_state.pop(cle, None)
+
+
+@st.dialog("Connectez-vous ou inscrivez-vous", on_dismiss=fermer_connexion)
 def _dialog_auth_modal(force: bool = False) -> None:
     _contenu_modal_auth(force=force, show_title=False, key_prefix="modal")
 
@@ -665,23 +676,19 @@ def barre_auth_top() -> None:
     _g, b1, b2 = st.columns([8, 1, 1], gap="small")
     with b1:
         if st.button("Se connecter", key="top_login", use_container_width=True):
-            st.session_state.show_auth_dialog = True
-            st.session_state.auth_email_step = "email"
+            ouvrir_connexion()
             st.rerun()
     with b2:
         if st.button("Inscription", key="top_signup", type="primary", use_container_width=True):
-            st.session_state.show_auth_dialog = True
-            st.session_state.auth_email_step = "email"
+            ouvrir_connexion()
             st.rerun()
 
 
 def afficher_dialog_auth_si_besoin() -> None:
-    """Ouvre le modal st.dialog (Inscription / Se connecter / quota)."""
-    force = bool(st.session_state.get("force_login"))
-    show = bool(st.session_state.get("show_auth_dialog")) or force
-    if not show or est_compte_connecte():
+    """Ouvre le modal st.dialog (Inscription / Se connecter / quota) s'il a été demandé."""
+    if not st.session_state.get("show_auth_dialog") or est_compte_connecte():
         return
-    _dialog_auth_modal(force=force)
+    _dialog_auth_modal(force=bool(st.session_state.get("force_login")))
 
 
 def barre_compte_sidebar() -> None:
@@ -705,8 +712,7 @@ def barre_auth_sidebar_bas() -> None:
     st.divider()
     if u.get("tier") == "guest":
         if st.button("Se connecter / S'inscrire", key="sb_login", use_container_width=True):
-            st.session_state.show_auth_dialog = True
-            st.session_state.auth_email_step = "email"
+            ouvrir_connexion()
             st.rerun()
     else:
         if st.button("Se déconnecter", key="btn_logout", use_container_width=True):
@@ -716,8 +722,10 @@ def barre_auth_sidebar_bas() -> None:
 
 
 def consommer_requete(meta: Optional[Dict] = None) -> tuple[bool, str]:
+    """Décompte serveur d'une requête (contrôle et enregistrement atomiques).
+    Pour un invité, un refus ouvre la boîte de connexion avec l'explication."""
     u = assurer_session_invite()
-    ok, msg = _users_db().verifier_quota(u)
+    ok, msg = _users_db().reserver_requete(u, meta or {})
     if not ok:
         tier = u.get("tier") or "guest"
         sature = msg == MSG_INVITES_SATURE
@@ -727,13 +735,5 @@ def consommer_requete(meta: Optional[Dict] = None) -> tuple[bool, str]:
             f"Requête refusée (rôle : {tier})", acteur=u.get("id") or "",
         )
         if tier == "guest":
-            st.session_state.force_login = True
-            st.session_state.show_auth_dialog = True
-        if tier == "guest" and not sature:
-            return (
-                False,
-                "Limite invité atteinte. Connectez-vous avec votre email ou GitHub pour continuer.",
-            )
-        return False, msg
-    _users_db().enregistrer_usage(u["id"], "ask", meta or {})
-    return True, msg
+            ouvrir_connexion(quota_atteint=not sature)
+    return ok, msg
