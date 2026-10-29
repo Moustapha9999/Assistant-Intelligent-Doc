@@ -25,8 +25,8 @@ _FALLBACKS: Dict[str, Any] = {
     "LLM_PRESENCE_PENALTY": 0.0,
     "LLM_FREQUENCY_PENALTY": 0.2,
     "MAX_TOKENS": 3000,
-    "GROQ_VISION_MODEL": "groq/compound",
-    "QUOTA_GUEST_REQ": 12,
+    "GROQ_VISION_MODEL": "qwen/qwen3.8-27b",
+    "QUOTA_GUEST_REQ": 5,
     "QUOTA_EMAIL_REQ": 80,
     "QUOTA_GITHUB_REQ": 200,
     "DESACTIVER_WEB_SEARCH": "false",
@@ -72,18 +72,26 @@ def _defaults_depuis_env() -> Dict[str, Any]:
 DEFAULTS = _defaults_depuis_env()
 
 
+def _lire_fichier() -> Dict[str, Any]:
+    try:
+        saved = json.loads(RUNTIME_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return saved if isinstance(saved, dict) else {}
+
+
 def charger() -> Dict[str, Any]:
     data = _defaults_depuis_env()
     if RUNTIME_FILE.exists():
         try:
-            saved = json.loads(RUNTIME_FILE.read_text(encoding="utf-8"))
-            if isinstance(saved, dict):
+            saved = _lire_fichier()
+            if saved:
                 # Ne pas garder un modèle Groq retiré sauvegardé en admin
                 modele = str(saved.get("LLM_MODEL") or "")
                 if "llama-3.3-70b" in modele or "llama-3.1-8b-instant" in modele:
                     saved = {**saved, "LLM_MODEL": data["LLM_MODEL"]}
                 vision = str(saved.get("GROQ_VISION_MODEL") or "")
-                if "llama-4-scout" in vision:
+                if any(x in vision for x in ("llama-4-scout", "groq/compound", "qwen3.6-27b")):
                     saved = {**saved, "GROQ_VISION_MODEL": data["GROQ_VISION_MODEL"]}
                 data.update(saved)
         except (OSError, json.JSONDecodeError):
@@ -92,14 +100,15 @@ def charger() -> Dict[str, Any]:
 
 
 def sauvegarder(valeurs: Dict[str, Any]) -> None:
-    actuel = charger()
+    """N'enregistre que les clés modifiées : les autres continuent de suivre le .env."""
+    actuel = _lire_fichier()
     actuel.update(valeurs)
     RUNTIME_FILE.parent.mkdir(parents=True, exist_ok=True)
     RUNTIME_FILE.write_text(
         json.dumps(actuel, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     # Appliquer aussi en variables d'environnement pour le process courant
-    for k, v in actuel.items():
+    for k, v in valeurs.items():
         os.environ[str(k)] = str(v)
 
 

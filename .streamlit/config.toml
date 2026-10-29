@@ -3,6 +3,9 @@ gatherUsageStats = false
 
 [server]
 headless = true
+# Valeurs par défaut, rendues explicites : protection XSRF et CORS restrictif
+enableXsrfProtection = true
+enableCORS = true
 
 [theme]
 base = "dark"

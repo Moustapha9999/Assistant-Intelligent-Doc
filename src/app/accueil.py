@@ -4,6 +4,7 @@ ISI KOMUNIK · Master IAGE
 """
 
 import sys, os, time, uuid, re, importlib
+from datetime import date
 from pathlib import Path
 from typing import Optional
 import streamlit as st
@@ -22,13 +23,21 @@ est_demande_projet = _generateur_reponse.est_demande_projet
 est_cahier_des_charges = _generateur_reponse.est_cahier_des_charges
 est_salutation = _generateur_reponse.est_salutation
 from core.orchestrateur import OrchestrateurAssistant
-from app.gestionnaire_fichiers import traiter_fichier, formater_pour_prompt, transcrire_audio
+from app.gestionnaire_fichiers import (
+    fichiers_de_rappel,
+    formater_pour_prompt,
+    necessite_preparation,
+    taille_lisible,
+    traiter_fichier,
+    transcrire_audio,
+)
 from app.historique_sqlite import HistoriqueSQLite
 from app.favoris_sqlite import FavorisSQLite
 from app.identite import identite_session
 from app.ui_composants import (
     afficher_avertissement,
     afficher_erreur,
+    afficher_flux,
     annuler_confirmation,
     confirmation_en_attente,
     demander_confirmation,
@@ -48,15 +57,25 @@ from app.auth_basique import (
     est_admin_session,
     est_compte_connecte,
     exiger_auth,
+    ouvrir_connexion,
+    users_db as _users_db_auth,
     utilisateur_courant,
     utilisateur_session,
 )
+from securite.injection import LIBELLES as _LIBELLES_INJECTION, detecter as detecter_injection
+from core.nettoyage_reponse import nettoyer_reponse
 from app import export_conversation as _export_conversation
 
 importlib.reload(_export_conversation)
 export_markdown = _export_conversation.export_markdown
 export_pdf = _export_conversation.export_pdf
-from config import DATE_COLLECTE_GITHUB
+from config import (
+    DATE_COLLECTE_GITHUB,
+    FICHIERS_MAX_PAR_MESSAGE,
+    UPLOAD_EXTENSIONS_OK,
+    UPLOAD_FORMATS_REFUSES,
+    UPLOAD_MAX_BYTES,
+)
 from retrieval.citations import citation_courte, determiner_provenance, enrichir_document
 from web.ressources import sources_web_reelles
 import streamlit.components.v1 as components
@@ -174,21 +193,20 @@ section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
     padding-top: 0 !important;
     margin-top: 0 !important;
 }
-.sb-export-box {
+.st-key-sb_export_box {
     margin: 6px 0 4px 0;
-    padding: 8px 10px 6px;
+    padding: 8px 10px 10px;
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 12px;
     background: rgba(255,255,255,0.03);
+    gap: 8px !important;
+}
+.st-key-sb_export_box [data-testid="stMarkdownContainer"] {
+    margin-bottom: 0 !important;
 }
 .sb-export-title {
     font-size: 11px; font-weight: 600; color: var(--text-dim);
     letter-spacing: 0.04em; text-transform: uppercase;
-    margin-bottom: 4px;
-}
-.sb-export-hint {
-    font-size: 11px; color: var(--text-muted); line-height: 1.35;
-    margin-bottom: 8px;
 }
 .sb-promo {
     margin: 8px 0 10px 0;
@@ -335,10 +353,9 @@ section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
 .thinking-chip:nth-child(3) { opacity: 0.28; filter: blur(2.5px); flex-basis: 160px; }
 .thinking-chip:nth-child(4) { opacity: 0.22; filter: blur(3px); }
 /* Composer flouté tant que la scène de réflexion est visible */
-section.main:has(.thinking-stage) .stHorizontalBlock:has(div[class*="st-key-inp_"]),
+section.main:has(.thinking-stage) [data-testid="stChatInput"],
 section.main:has(.thinking-stage) .composer-hint,
-section.main:has(.thinking-stage) .upload-preview,
-section.main:has(.thinking-stage) .web-on {
+section.main:has(.thinking-stage) .st-key-composer_outils {
     filter: blur(5px) !important;
     opacity: 0.35 !important;
     pointer-events: none !important;
@@ -363,6 +380,12 @@ section.main:has(.thinking-stage) .web-on {
     width: 28px !important; height: 28px !important;
     font-size: 11px !important;
     flex-shrink: 0 !important;
+}
+/* Images jointes ou générées : taille réelle, pas le format avatar ci-dessus */
+[data-testid="stChatMessageContent"] [data-testid="stImage"] img {
+    width: auto !important; height: auto !important;
+    max-width: 100% !important; max-height: 320px !important;
+    border-radius: 10px !important; background: transparent !important;
 }
 [data-testid="stChatMessageContent"] {
     background: transparent !important;
@@ -390,6 +413,58 @@ section.main:has(.thinking-stage) .web-on {
     font-family: 'Inter', sans-serif !important;
     font-size: 15px !important;
     font-weight: 500 !important;
+    flex: 0 1 auto !important;
+    width: fit-content !important;
+    min-width: 0 !important;
+    margin-left: auto !important;
+}
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageContent"] [data-testid="stVerticalBlock"],
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageContent"] [data-testid="stElementContainer"] {
+    width: auto !important;
+    gap: 2px !important;
+}
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageContent"] p:last-child {
+    margin-bottom: 0 !important;
+}
+/* Streamlit met une marge basse négative sur le markdown : le texte débordait du bas de la bulle */
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stMarkdownContainer"] {
+    margin-bottom: 0 !important;
+}
+
+/* Barre d'actions sous un message : copier / modifier / pouce haut / pouce bas */
+div[class*="st-key-tbrow_"] {
+    gap: 0 !important;
+    margin: 2px 0 0 0 !important;
+}
+/* Sous la bulle utilisateur, alignée sur son bord droit (avatar 28px + espacement 12px) */
+div[class*="st-key-tbrow_user_"] {
+    margin: -14px 0 0 0 !important;
+    padding-right: 40px !important;
+}
+div[class*="st-key-tbrow_"] [data-testid="stElementContainer"] {
+    width: auto !important;
+    flex: 0 0 auto !important;
+}
+div[class*="st-key-tbrow_"] iframe {
+    width: 60px !important;
+    display: block;
+}
+div[class*="st-key-tbrow_"] .stButton button {
+    width: 28px !important; height: 28px !important;
+    min-height: 28px !important; min-width: 28px !important;
+    padding: 0 !important; margin: 0 !important;
+    border: none !important; border-radius: 8px !important;
+    background: transparent !important;
+    color: #b0aea5 !important;
+    justify-content: center !important;
+}
+div[class*="st-key-tbrow_"] .stButton button:hover:not(:disabled) {
+    background: rgba(255,255,255,0.08) !important;
+    color: #f5f4ef !important;
+}
+div[class*="st-key-tbrow_"] .stButton button [data-testid="stIconMaterial"] {
+    font-size: 16px !important;
+    margin: 0 !important;
 }
 
 /* IA → gauche */
@@ -444,70 +519,65 @@ section.main:has(.thinking-stage) .web-on {
     pointer-events: none;
 }
 .input-inner { max-width: 720px; margin: 0 auto; padding: 0 24px; }
-.upload-preview {
-    display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;
-}
-.up-file {
-    display: inline-flex; align-items: center; gap: 6px;
-    font-size: 12px; color: var(--text-muted);
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 10px; padding: 6px 11px;
-}
-.up-file .ufi { color: var(--accent); }
 .composer-hint {
     font-size: 11.5px; color: var(--text-dim);
-    text-align: center; margin-top: 12px; letter-spacing: 0.1px;
+    text-align: center; margin-top: 10px; letter-spacing: 0.1px;
 }
 
-/* Composer = rangée qui contient le champ de saisie (clé inp_…) */
-section.main .block-container .stHorizontalBlock:has(div[class*="st-key-inp_"]) {
+/* Composer : st.chat_input (pièces jointes, audio et envoi intégrés) */
+[data-testid="stChatInput"] {
+    max-width: 720px;
+    margin: 0 auto;
+}
+[data-testid="stChatInput"] > div {
     background: var(--bg-input) !important;
     border: 1px solid rgba(255,255,255,0.1) !important;
     border-radius: 22px !important;
-    padding: 8px 10px 8px 10px !important;
     box-shadow: 0 8px 32px rgba(0,0,0,0.28) !important;
-    align-items: center !important;
-    max-width: 720px !important;
-    margin: 0 auto !important;
-    gap: 6px !important;
+    transition: border-color .12s ease;
 }
-
-div[class*="st-key-inp_"] .stTextInput { margin: 0 !important; }
-div[class*="st-key-inp_"] [data-baseweb="input"],
-div[class*="st-key-inp_"] [data-baseweb="input"] > div { background: transparent !important; border: none !important; }
-div[class*="st-key-inp_"] input {
+[data-testid="stChatInput"] > div:focus-within {
+    border-color: rgba(91,159,212,0.55) !important;
+}
+[data-testid="stChatInput"] [data-baseweb="textarea"],
+[data-testid="stChatInput"] [data-baseweb="base-input"] {
     background: transparent !important;
     border: none !important;
-    border-radius: 0 !important;
-    color: var(--text) !important;
+}
+[data-testid="stChatInputTextArea"] {
     font-family: 'Inter', sans-serif !important;
     font-size: 15px !important;
-    padding: 10px 8px !important;
-    box-shadow: none !important;
-    height: 44px !important;
+    color: var(--text) !important;
 }
-div[class*="st-key-inp_"] input:focus {
-    border: none !important; box-shadow: none !important;
-}
-div[class*="st-key-inp_"] input::placeholder { color: var(--text-dim) !important; }
+[data-testid="stChatInputTextArea"]::placeholder { color: var(--text-dim) !important; }
+/* Le micro reste fonctionnel mais se déclenche depuis le menu « + » */
+[data-testid="stChatInputMicButton"] { display: none !important; }
 
-/* Bouton envoyer (rond) */
-div.st-key-btn_send button {
-    background: var(--text) !important;
-    color: #1a1918 !important;
-    border: none !important;
-    border-radius: 50% !important;
-    font-weight: 600 !important;
-    font-size: 16px !important;
-    width: 40px !important; height: 40px !important;
-    min-width: 40px !important; max-width: 40px !important;
-    padding: 0 !important; cursor: pointer !important;
+/* Outils au-dessus du composer (recherche web, connexion pour joindre) */
+.st-key-composer_outils {
+    max-width: 720px;
+    margin: 0 auto 6px !important;
+    gap: 6px !important;
 }
-div.st-key-btn_send button:hover {
-    background: #fff !important; transform: none !important; opacity: 0.92;
+.st-key-composer_outils .stButton button {
+    min-height: 30px !important;
+    padding: 2px 12px !important;
+    border-radius: 999px !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    background: transparent !important;
+    color: var(--text-muted) !important;
+    font-size: 12.5px !important;
 }
-div.st-key-btn_send button:disabled { background: var(--text-dim) !important; }
+.st-key-composer_outils .stButton button:hover:not(:disabled) {
+    background: rgba(255,255,255,0.06) !important;
+    color: var(--text) !important;
+}
+.st-key-composer_outils .st-key-btn_web_on button {
+    color: #9ec9e8 !important;
+    background: rgba(91,159,212,0.14) !important;
+    border-color: rgba(91,159,212,0.35) !important;
+}
+.st-key-composer_outils .stButton button [data-testid="stIconMaterial"] { font-size: 16px !important; }
 
 /* Suggestions de l'écran d'accueil (clés sug_…) */
 div[class*="st-key-sug_"] button {
@@ -576,6 +646,10 @@ section[data-testid="stSidebar"] [data-testid="stPopover"] button {
     color: var(--text-dim) !important;
     justify-content: center !important;
 }
+/* Le chevron natif double l'icône ⋯ : un seul symbole par déclencheur */
+section[data-testid="stSidebar"] [data-testid="stPopoverButton"] div[aria-hidden="true"]:has([data-testid="stIconMaterial"]) {
+    display: none !important;
+}
 section[data-testid="stSidebar"] [data-testid="stPopover"] > button:hover,
 section[data-testid="stSidebar"] [data-testid="stPopover"] button:hover {
     background: rgba(255,255,255,0.08) !important;
@@ -616,30 +690,6 @@ section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"]:has(div[cl
     color: var(--text-muted) !important;
     font-size: 12px !important;
 }
-.plus-menu {
-    min-width: 268px;
-    padding: 4px 2px 2px;
-}
-.plus-menu-item {
-    display: flex; align-items: center; gap: 10px;
-    padding: 9px 12px; margin: 1px 0;
-    border-radius: 10px;
-    font-size: 14px; font-weight: 450;
-    color: var(--text);
-    line-height: 1.25;
-}
-.plus-menu-item .ico {
-    width: 18px; text-align: center; opacity: 0.9; flex-shrink: 0;
-}
-.plus-menu-item .meta {
-    margin-left: auto;
-    font-size: 11px; color: var(--text-dim); font-weight: 400;
-}
-.plus-menu-sep {
-    height: 1px; margin: 6px 8px;
-    background: rgba(255,255,255,0.08);
-}
-
 .stSelectbox > div > div {
     background: var(--bg-elev) !important;
     border-color: rgba(255,255,255,0.1) !important;
@@ -670,27 +720,6 @@ div[data-testid="stExpander"] summary {
 section.main [data-testid="stChatMessage"] iframe {
     margin: 2px 0 0 0 !important;
     border: none !important;
-}
-
-/* Bouton + du composer */
-.composer-plus-wrap button,
-section.main .stPopover > button,
-section.main [data-testid="stPopover"] > button {
-    background: rgba(255,255,255,0.06) !important;
-    color: var(--text) !important;
-    border: 1px solid rgba(255,255,255,0.1) !important;
-    border-radius: 12px !important;
-    width: 40px !important;
-    height: 40px !important;
-    min-width: 40px !important;
-    max-width: 40px !important;
-    padding: 0 !important;
-    font-size: 20px !important;
-    font-weight: 400 !important;
-}
-section.main .stPopover > button:hover,
-section.main [data-testid="stPopover"] > button:hover {
-    background: rgba(255,255,255,0.1) !important;
 }
 
 /* Corps des popovers */
@@ -752,50 +781,17 @@ div[data-testid="stPopoverBody"],
     color: #c5e2f7 !important;
     border: none !important;
 }
-/* Menu + du composer : plus large */
-[data-testid="stPopoverBody"]:has(.plus-menu) {
-    min-width: 260px !important;
-    max-width: 320px !important;
-    width: 280px !important;
-    padding: 6px !important;
-    border-radius: 14px !important;
-}
-[data-testid="stPopoverBody"]:has(.plus-menu) .stButton button {
-    height: 40px !important;
-    min-height: 40px !important;
-    padding: 0 12px !important;
-    font-size: 14px !important;
-    border-radius: 10px !important;
-}
 [data-testid="stPopoverBody"] hr {
     margin: 6px 8px !important;
     border-color: rgba(255,255,255,0.08) !important;
 }
 
-/* Audio input discret */
-[data-testid="stAudioInput"] {
-    background: transparent !important;
-}
-[data-testid="stAudioInput"] label {
-    color: var(--text-dim) !important;
-    font-size: 12px !important;
-}
-
-.plus-hint {
-    font-size: 12px; color: var(--text-dim); margin: 4px 0 10px;
-}
-.web-on {
-    display: inline-flex; align-items: center; gap: 6px;
-    font-size: 12px; color: #9ec9e8;
-    background: rgba(91,159,212,0.14);
-    border: 1px solid rgba(91,159,212,0.28);
-    border-radius: 999px; padding: 4px 12px;
-    margin-bottom: 10px;
-}
-.web-on .dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: #5b9fd4;
-    box-shadow: 0 0 0 3px rgba(91,159,212,0.2);
+/* Focus clavier visible sur les déclencheurs de menus et la barre d'actions */
+[data-testid="stPopover"] button:focus-visible,
+div[class*="st-key-tbrow_"] .stButton button:focus-visible,
+.st-key-composer_outils .stButton button:focus-visible {
+    outline: 2px solid var(--accent) !important;
+    outline-offset: 2px !important;
 }
 
 </style>
@@ -914,6 +910,336 @@ components.html(
       }
       setInterval(update, 400);
       update();
+
+      // Composer : rendre le focus au champ à la fin d'une réponse (placeholder « Réflexion… »).
+      // Streamlit désactive aussi le champ pendant chaque rerun : ce cas ne doit pas voler le focus.
+      // Pas sur écran tactile (ouvrirait le clavier) ni sous une fenêtre modale.
+      const tactile = window.parent.matchMedia && window.parent.matchMedia('(pointer: coarse)').matches;
+      let composerReflechissait = false;
+      setInterval(function () {
+        const ta = doc.querySelector('[data-testid="stChatInputTextArea"]');
+        if (!ta) return;
+        const reflechit = (ta.placeholder || '').indexOf('Réflexion') === 0;
+        const libre = !doc.activeElement || doc.activeElement === doc.body;
+        const modale = doc.querySelector('[role="dialog"]');
+        if (composerReflechissait && !reflechit && !ta.disabled && !tactile && libre && !modale) {
+          ta.focus();
+        }
+        if (reflechit || !ta.disabled) composerReflechissait = reflechit;
+      }, 300);
+
+      // Fenêtre modale : focus sur le premier champ de saisie à l'ouverture et à chaque
+      // changement d'étape (sinon Streamlit le place sur le 1er bouton, ex. « Google »).
+      let champModaleVu = null;
+      setInterval(function () {
+        const champ = doc.querySelector(
+          '[role="dialog"] input:not([type="hidden"]):not([disabled]), [role="dialog"] textarea:not([disabled])'
+        );
+        if (champ && champ !== champModaleVu) {
+          const dansModale = doc.activeElement && doc.activeElement.closest('[role="dialog"]');
+          const surChamp = dansModale && /^(INPUT|TEXTAREA)$/.test(doc.activeElement.tagName);
+          if (!surChamp) champ.focus();
+        }
+        champModaleVu = champ;
+      }, 250);
+
+      // Noms accessibles des boutons à icône seule (sinon lus « thumb_up », « ⋯ »)
+      const NOMS = [
+        ['[class*="st-key-fb_up_"] button', 'Réponse utile'],
+        ['[class*="st-key-fb_dn_"] button', 'Réponse pas utile'],
+        ['section[data-testid="stSidebar"] [data-testid="stPopoverButton"]', 'Actions de la discussion'],
+      ];
+      setInterval(function () {
+        NOMS.forEach(function (n) {
+          doc.querySelectorAll(n[0]).forEach(function (b) {
+            if (!b.getAttribute('aria-label')) b.setAttribute('aria-label', n[1]);
+          });
+        });
+        doc.querySelectorAll('[data-testid="stFileChipDeleteBtn"] button[aria-label^="Remove "]').forEach(function (b) {
+          b.setAttribute('aria-label', 'Retirer ' + b.getAttribute('aria-label').slice(7));
+          b.title = b.getAttribute('aria-label');
+        });
+      }, 1000);
+
+      // Menu « + » du composer : exécuté dans la page parente (caméra/micro y sont autorisés)
+      function assistPlusMenu() {
+        if (window._assistPlusMenu) return;
+        window._assistPlusMenu = true;
+        const doc = document;
+        const tactile = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+        const svg = function (p) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + p + '</svg>'; };
+        const ENTREES = [
+          ['fichiers', 'Ajouter des fichiers ou images', svg('<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>')],
+          ['photo', 'Prendre une photo', svg('<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>')],
+          ['audio', 'Enregistrer un audio', svg('<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/>')],
+        ];
+
+        const style = doc.createElement('style');
+        style.textContent = `
+          #assist-plus-menu {
+            position: fixed; z-index: 2147483646; min-width: 250px;
+            background: #2b2a27; border: 1px solid rgba(255,255,255,0.1); border-radius: 14px;
+            padding: 6px; box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+            display: flex; flex-direction: column; gap: 2px; font-family: 'Inter', sans-serif;
+          }
+          #assist-plus-menu button {
+            display: flex; align-items: center; gap: 12px; width: 100%;
+            padding: 9px 12px; border: none; border-radius: 9px; background: transparent;
+            color: #ecebe6; font: 500 14px 'Inter', sans-serif; text-align: left; cursor: pointer;
+          }
+          #assist-plus-menu button:hover, #assist-plus-menu button:focus { background: rgba(255,255,255,0.08); outline: none; }
+          #assist-plus-menu button:focus-visible { box-shadow: inset 0 0 0 2px #5b9fd4; }
+          #assist-plus-menu svg, #assist-cam svg {
+            width: 18px; height: 18px; flex: 0 0 18px; stroke: #b0aea5; fill: none;
+            stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+          }
+          #assist-cam {
+            position: fixed; inset: 0; z-index: 2147483646; background: rgba(0,0,0,0.6);
+            display: flex; align-items: center; justify-content: center; font-family: 'Inter', sans-serif;
+          }
+          #assist-cam .cam-box {
+            background: #2b2a27; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
+            padding: 16px; width: min(520px, 92vw); display: flex; flex-direction: column; gap: 12px;
+          }
+          #assist-cam video { width: 100%; border-radius: 10px; background: #000; transform: scaleX(-1); }
+          #assist-cam .cam-msg { margin: 0; color: #d6d4cc; font-size: 14px; }
+          #assist-cam .cam-actions { display: flex; justify-content: flex-end; gap: 8px; }
+          #assist-cam .cam-actions button {
+            padding: 8px 16px; border-radius: 10px; font: 500 14px 'Inter', sans-serif; cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.14); background: transparent; color: #ecebe6;
+          }
+          #assist-cam .cam-actions .cam-ok { background: #5b9fd4; border-color: #5b9fd4; color: #0f1b26; }
+          #assist-cam .cam-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+          #assist-cam .cam-actions button:focus-visible { outline: 2px solid #5b9fd4; outline-offset: 2px; }
+          #assist-toast {
+            position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 2147483646;
+            background: #3a2626; color: #f3d6d6; border: 1px solid rgba(220,90,90,0.4); border-radius: 10px;
+            padding: 10px 14px; font: 14px 'Inter', sans-serif; max-width: 90vw;
+          }
+        `;
+        doc.head.appendChild(style);
+
+        let menu = null;
+        const zone = function () { return doc.querySelector('[data-testid="stChatInputFileUploadButton"]'); };
+        const boutonPlus = function () { const z = zone(); return z && z.querySelector('button'); };
+        const inputFichiers = function () { const z = zone(); return z && z.querySelector('input[type="file"]'); };
+        const champTexte = function () { return doc.querySelector('[data-testid="stChatInputTextArea"]'); };
+
+        function avertir(texte) {
+          let t = doc.getElementById('assist-toast');
+          if (!t) {
+            t = doc.createElement('div');
+            t.id = 'assist-toast';
+            t.setAttribute('role', 'alert');
+            doc.body.appendChild(t);
+          }
+          t.textContent = texte;
+          clearTimeout(t._minuteur);
+          t._minuteur = setTimeout(function () { t.remove(); }, 6000);
+        }
+
+        function joindre(fichiers) {
+          const inp = inputFichiers();
+          if (!inp || !fichiers.length) return;
+          const dt = new DataTransfer();
+          fichiers.forEach(function (f) { dt.items.add(f); });
+          inp.files = dt.files;
+          inp.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        function fermer(rendreFocus) {
+          if (!menu) return;
+          menu.remove();
+          menu = null;
+          const b = boutonPlus();
+          if (b) {
+            b.setAttribute('aria-expanded', 'false');
+            if (rendreFocus) b.focus();
+          }
+        }
+
+        function ouvrir() {
+          const b = boutonPlus();
+          if (!b) return;
+          menu = doc.createElement('div');
+          menu.id = 'assist-plus-menu';
+          menu.setAttribute('role', 'menu');
+          menu.setAttribute('aria-label', 'Joindre');
+          ENTREES.forEach(function (e) {
+            const item = doc.createElement('button');
+            item.type = 'button';
+            item.setAttribute('role', 'menuitem');
+            item.innerHTML = e[2] + '<span>' + e[1] + '</span>';
+            item.addEventListener('click', function (ev) {
+              ev.stopPropagation();
+              fermer(false);
+              agir(e[0]);
+            });
+            menu.appendChild(item);
+          });
+          menu.addEventListener('keydown', function (ev) {
+            const items = Array.from(menu.querySelectorAll('button'));
+            const i = items.indexOf(doc.activeElement);
+            if (ev.key === 'ArrowDown') { ev.preventDefault(); items[(i + 1) % items.length].focus(); }
+            else if (ev.key === 'ArrowUp') { ev.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+            else if (ev.key === 'Home') { ev.preventDefault(); items[0].focus(); }
+            else if (ev.key === 'End') { ev.preventDefault(); items[items.length - 1].focus(); }
+            else if (ev.key === 'Escape') { ev.preventDefault(); fermer(true); }
+            else if (ev.key === 'Tab') { fermer(false); }
+          });
+          doc.body.appendChild(menu);
+          const r = b.getBoundingClientRect();
+          menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+          menu.style.bottom = (window.innerHeight - r.top + 8) + 'px';
+          b.setAttribute('aria-haspopup', 'menu');
+          b.setAttribute('aria-expanded', 'true');
+          menu.querySelector('button').focus();
+        }
+
+        function agir(action) {
+          if (action === 'fichiers') {
+            // Appel synchrone dans le geste utilisateur, sinon le navigateur refuse le sélecteur natif
+            const inp = inputFichiers();
+            if (inp) { inp.value = ''; inp.click(); }
+            else avertir('Import de fichiers indisponible pour le moment.');
+          } else if (action === 'photo') {
+            if (tactile) photoMobile(); else photoWebcam();
+          } else if (action === 'audio') {
+            enregistrer();
+          }
+        }
+
+        function photoMobile() {
+          const inp = doc.createElement('input');
+          inp.type = 'file';
+          inp.accept = 'image/*';
+          inp.setAttribute('capture', 'environment');
+          inp.addEventListener('change', function () { joindre(Array.from(inp.files || [])); });
+          inp.click();
+        }
+
+        function photoWebcam() {
+          const ov = doc.createElement('div');
+          ov.id = 'assist-cam';
+          ov.setAttribute('role', 'dialog');
+          ov.setAttribute('aria-modal', 'true');
+          ov.setAttribute('aria-label', 'Prendre une photo');
+          ov.innerHTML = '<div class="cam-box"><video autoplay playsinline muted></video>'
+            + '<p class="cam-msg">Autorisez l\\u2019accès à la caméra si le navigateur le demande.</p>'
+            + '<div class="cam-actions"><button type="button" class="cam-annuler">Annuler</button>'
+            + '<button type="button" class="cam-ok" disabled>Prendre la photo</button></div></div>';
+          doc.body.appendChild(ov);
+          const video = ov.querySelector('video');
+          const msg = ov.querySelector('.cam-msg');
+          const ok = ov.querySelector('.cam-ok');
+          const annuler = ov.querySelector('.cam-annuler');
+          let flux = null;
+          annuler.focus();
+
+          function fermerCam() {
+            if (flux) flux.getTracks().forEach(function (t) { t.stop(); });
+            ov.remove();
+            const ta = champTexte();
+            if (ta) ta.focus();
+          }
+          annuler.addEventListener('click', fermerCam);
+          ov.addEventListener('click', function (ev) { if (ev.target === ov) fermerCam(); });
+          ov.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Escape') { ev.preventDefault(); fermerCam(); }
+            else if (ev.key === 'Tab') {
+              const btns = [annuler, ok].filter(function (b) { return !b.disabled; });
+              const i = btns.indexOf(doc.activeElement);
+              ev.preventDefault();
+              btns[(i + (ev.shiftKey ? btns.length - 1 : 1)) % btns.length].focus();
+            }
+          });
+          ok.addEventListener('click', function () {
+            const c = doc.createElement('canvas');
+            c.width = video.videoWidth;
+            c.height = video.videoHeight;
+            c.getContext('2d').drawImage(video, 0, 0);
+            c.toBlob(function (blob) {
+              if (blob) joindre([new File([blob], 'photo-' + Date.now() + '.jpg', { type: 'image/jpeg' })]);
+              fermerCam();
+            }, 'image/jpeg', 0.9);
+          });
+
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            video.style.display = 'none';
+            msg.textContent = 'Caméra non disponible dans ce navigateur. Utilisez « Ajouter des fichiers ou images ».';
+            return;
+          }
+          navigator.mediaDevices.getUserMedia({ video: true }).then(function (s) {
+            if (!ov.isConnected) { s.getTracks().forEach(function (t) { t.stop(); }); return; }
+            flux = s;
+            video.srcObject = s;
+            msg.textContent = 'Cadrez puis prenez la photo : elle sera jointe à votre message.';
+            ok.disabled = false;
+            ok.focus();
+          }).catch(function () {
+            video.style.display = 'none';
+            msg.textContent = 'Caméra inaccessible : autorisez son accès dans le navigateur ou vérifiez qu\\u2019une caméra est branchée.';
+          });
+        }
+
+        function enregistrer() {
+          const mic = doc.querySelector('[data-testid="stChatInputMicButton"]');
+          if (!mic || mic.disabled) { avertir('Enregistrement audio indisponible pour le moment.'); return; }
+          const lancer = function () { mic.click(); };
+          if (navigator.permissions && navigator.permissions.query) {
+            navigator.permissions.query({ name: 'microphone' }).then(function (p) {
+              if (p.state === 'denied') avertir('Micro bloqué : autorisez son accès dans les réglages du navigateur.');
+              else lancer();
+            }).catch(lancer);
+          } else {
+            lancer();
+          }
+        }
+
+        // Le clic (ou Entrée/Espace) sur « + » ouvre le menu au lieu du sélecteur de fichiers.
+        // Les clics sur l'<input type="file"> lui-même doivent passer : un preventDefault() y annule le dialogue natif.
+        doc.addEventListener('click', function (ev) {
+          const z = zone();
+          if (z && z.contains(ev.target)) {
+            if (ev.target.matches && ev.target.matches('input[type="file"]')) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (menu) fermer(true); else ouvrir();
+            return;
+          }
+          if (menu && !menu.contains(ev.target)) fermer(false);
+        }, true);
+        doc.addEventListener('keydown', function (ev) {
+          const z = zone();
+          if (z && z.contains(ev.target) && (ev.key === 'Enter' || ev.key === ' ')) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (menu) fermer(true); else ouvrir();
+          }
+        }, true);
+        // L'infobulle Streamlit « Upload or drag and drop… » recouvrirait le menu
+        ['mouseover', 'mouseout', 'pointerover', 'pointerout'].forEach(function (type) {
+          doc.addEventListener(type, function (ev) {
+            const z = zone();
+            if (z && z.contains(ev.target)) ev.stopPropagation();
+          }, true);
+        });
+        window.addEventListener('resize', function () { fermer(false); });
+        setInterval(function () {
+          const b = boutonPlus();
+          if (b && b.getAttribute('aria-haspopup') !== 'menu') {
+            b.setAttribute('aria-label', 'Joindre un fichier, une photo ou un audio');
+            b.setAttribute('aria-haspopup', 'menu');
+            b.setAttribute('aria-expanded', 'false');
+          }
+        }, 1000);
+      }
+      if (!doc.getElementById('assist-plus-script')) {
+        const s = doc.createElement('script');
+        s.id = 'assist-plus-script';
+        s.textContent = '(' + assistPlusMenu.toString() + ')();';
+        doc.head.appendChild(s);
+      }
 
       // Pont toolbar (edit/feedback) : le sandbox bloque location.href depuis l'iframe
       if (!window.parent._assistToolbarBound) {
@@ -1258,9 +1584,6 @@ def nouvelle_discussion():
     st.session_state.historique_llm = []
     st.session_state.fichiers_en_attente = []
     st.session_state.en_cours = False
-    st.session_state.show_audio = False
-    st.session_state.show_camera = False
-    st.session_state.show_files = False
     st.session_state.contexte_projet = {}
     st.session_state.input_key += 1
     try:
@@ -1281,9 +1604,6 @@ def charger_discussion(cid: str):
             st.session_state.historique_llm = list(c.get("historique_llm", []))
             st.session_state.fichiers_en_attente = []
             st.session_state.en_cours = False
-            st.session_state.show_audio = False
-            st.session_state.show_camera = False
-            st.session_state.show_files = False
             st.session_state.input_key += 1
             return
     # Fallback SQLite
@@ -1314,9 +1634,6 @@ def init():
         "conversations": None,
         "conversation_id": None,
         "web_search_actif": False,
-        "show_audio": False,
-        "show_camera": False,
-        "show_files": False,
         "utiliser_corpus_avec_fichier": True,
         "edit_msg_idx": None,
         "contexte_projet": {},
@@ -1472,8 +1789,7 @@ def afficher_sources(docs: list, msg_idx: int = 0):
                     key=f"fav_btn_{msg_idx}_{i}",
                     use_container_width=True,
                 ):
-                    st.session_state.show_auth_dialog = True
-                    st.session_state.auth_email_step = "email"
+                    ouvrir_connexion()
                     notifier("Connectez-vous pour enregistrer un favori.", "info")
                     st.rerun()
             else:
@@ -1506,7 +1822,9 @@ def icone_fichier(nom: str) -> str:
     ext = Path(nom).suffix.lower()
     if ext == ".pdf":                          return "📄"
     if ext in {".docx", ".doc"}:               return "📘"
-    if ext in {".png",".jpg",".jpeg",".gif",".webp"}: return "🖼️"
+    if ext in {".xlsx",".xls",".csv",".tsv"}: return "📊"
+    if ext in {".pptx"}:                      return "📽️"
+    if ext in {".png",".jpg",".jpeg",".gif",".webp",".bmp"}: return "🖼️"
     if ext in {".wav",".mp3",".m4a",".ogg",".webm"}: return "🎤"
     if ext in {".py"}:                        return "🐍"
     if ext in {".js",".ts"}:                  return "🟨"
@@ -1517,6 +1835,34 @@ def icone_fichier(nom: str) -> str:
     if ext in {".md",".txt",".rst"}:          return "📝"
     if ext in {".json",".yaml",".yml",".toml"}: return "⚙️"
     return "📎"
+
+
+def _afficher_piece_jointe(f: dict) -> None:
+    """Pièce jointe dans la bulle utilisateur : aperçu, type, taille, avertissements."""
+    infos = [p for p in (f.get("resume"), taille_lisible(f["taille"]) if f.get("taille") else "") if p]
+    if f.get("type") == "image" and f.get("image_b64"):
+        try:
+            import base64 as _b64img
+
+            st.image(_b64img.b64decode(f["image_b64"]), caption=f.get("nom") or "image",
+                     use_container_width=True)
+        except Exception:
+            st.caption(f"🖼 {f.get('nom')}")
+    if f.get("image_omise"):
+        infos.append("image non conservée après rechargement")
+
+    def _neutre(t: str) -> str:
+        return re.sub(r"[\[\]`*_<>#|\\]", " ", str(t))
+
+    lignes = []
+    if not (f.get("type") == "image" and f.get("image_b64")):
+        nom = str(f.get("nom", "fichier")).replace("`", "'")
+        lignes.append(f"`{icone_fichier(nom)} {nom}`")
+    if infos:
+        lignes.append(f":gray[{_neutre(' · '.join(infos))}]")
+    lignes += [f":orange[⚠ {_neutre(a)}]" for a in f.get("avertissements") or []]
+    if lignes:
+        st.markdown("  \n".join(lignes))
 
 
 def _question_precedente(messages: list, idx: int) -> str:
@@ -1639,6 +1985,22 @@ def _afficher_actions_message(msg_idx: int, contenu: str, role: str) -> None:
     dis_attr = "disabled" if figee else ""
 
     # Copier / éditer en HTML ; 👍/👎 en boutons Streamlit (fiable → Admin)
+    rangee = st.container(
+        horizontal=True,
+        gap=None,
+        vertical_alignment="center",
+        horizontal_alignment="right" if role == "user" else "left",
+        key=f"tbrow_{safe}",
+    )
+    with rangee:
+        _toolbar_html(safe, align, ico_copy, edit_svg, edit_title, dis_attr, ico_ok, js_texte, figee, msg_idx)
+        if role == "assistant":
+            _boutons_feedback(msg_idx, safe)
+
+    _edition_inline(msg_idx, contenu, role, en_edition, figee)
+
+
+def _toolbar_html(safe, align, ico_copy, edit_svg, edit_title, dis_attr, ico_ok, js_texte, figee, msg_idx) -> None:
     components.html(
         f"""
         <style>
@@ -1722,43 +2084,38 @@ def _afficher_actions_message(msg_idx: int, contenu: str, role: str) -> None:
         }})();
         </script>
         """,
+        width=60,
         height=30,
     )
 
-    if role == "assistant":
-        deja = st.session_state.setdefault("feedback_envoye", [])
-        if not isinstance(deja, list):
-            deja = list(deja)
-            st.session_state.feedback_envoye = deja
-        fb_key = f"{st.session_state.conversation_id}:{msg_idx}"
-        c_up, c_dn, _ = st.columns([1, 1, 12])
-        with c_up:
-            if st.button(
-                "👍",
-                key=f"fb_up_{safe}",
-                help="Utile — visible dans Admin",
-                disabled=fb_key in deja,
-            ):
-                if _enregistrer_feedback_msg(msg_idx, 1):
-                    deja.append(fb_key)
-                    notifier("Merci, votre avis a été enregistré.")
-                    st.rerun()
-                else:
-                    st.toast("Votre avis n'a pas pu être enregistré.", icon=":material/error:")
-        with c_dn:
-            if st.button(
-                "👎",
-                key=f"fb_dn_{safe}",
-                help="Pas utile — visible dans Admin",
-                disabled=fb_key in deja,
-            ):
-                if _enregistrer_feedback_msg(msg_idx, -1):
-                    deja.append(fb_key)
-                    notifier("Merci, votre avis a été enregistré.")
-                    st.rerun()
-                else:
-                    st.toast("Votre avis n'a pas pu être enregistré.", icon=":material/error:")
 
+def _boutons_feedback(msg_idx: int, safe: str) -> None:
+    deja = st.session_state.setdefault("feedback_envoye", [])
+    if not isinstance(deja, list):
+        deja = list(deja)
+        st.session_state.feedback_envoye = deja
+    fb_key = f"{st.session_state.conversation_id}:{msg_idx}"
+    for note, icone, aide, cle in (
+        (1, ":material/thumb_up:", "Utile — visible dans Admin", f"fb_up_{safe}"),
+        (-1, ":material/thumb_down:", "Pas utile — visible dans Admin", f"fb_dn_{safe}"),
+    ):
+        if st.button(
+            "",
+            icon=icone,
+            key=cle,
+            help=aide,
+            type="tertiary",
+            disabled=fb_key in deja,
+        ):
+            if _enregistrer_feedback_msg(msg_idx, note):
+                deja.append(fb_key)
+                notifier("Merci, votre avis a été enregistré.")
+                st.rerun()
+            else:
+                st.toast("Votre avis n'a pas pu être enregistré.", icon=":material/error:")
+
+
+def _edition_inline(msg_idx: int, contenu: str, role: str, en_edition: bool, figee: bool) -> None:
     if en_edition and not figee:
         nouveau = st.text_area(
             "Éditer le message",
@@ -1831,11 +2188,20 @@ with st.sidebar:
             value=int(st.session_state.get("filtre_stars", 0) or 0),
             step=100, key="sel_stars",
         )
-        st.session_state.filtre_date = st.text_input(
-            "Mis à jour après (AAAA-MM-JJ)",
-            value=st.session_state.get("filtre_date", ""),
-            key="sel_date",
+        try:
+            _date_init = date.fromisoformat(st.session_state.get("filtre_date") or "")
+        except ValueError:
+            _date_init = None
+        _date_min = st.date_input(
+            "Mis à jour après",
+            value=_date_init,
+            min_value=date(2008, 1, 1),
+            max_value=date.today(),
+            format="YYYY-MM-DD",
+            key="sel_date_min",
+            help="Laisser vide pour ne pas filtrer par date",
         )
+        st.session_state.filtre_date = _date_min.isoformat() if isinstance(_date_min, date) else ""
         st.session_state.top_k = st.slider("Nombre de sources", 3, 10, 5, key="topk")
         st.session_state.utiliser_corpus_avec_fichier = st.toggle(
             "Fichier + corpus ensemble",
@@ -1994,24 +2360,15 @@ with st.sidebar:
     if st.session_state.messages:
         titre_export = _titre_discussion(st.session_state.messages)
         cid = st.session_state.conversation_id
-        st.markdown(
-            """
-            <div class="sb-export-box">
-              <div class="sb-export-title">Exporter</div>
-              <div class="sb-export-hint">
-                Document structuré : résumé, questions / réponses numérotées et sources.
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
         md = export_markdown(
             st.session_state.messages,
             conversation_id=cid,
             titre=titre_export,
         )
         safe_name = re.sub(r"[^\w\-]+", "_", titre_export)[:40].strip("_") or "conversation"
-        c_md, c_pdf = st.columns(2)
+        boite_export = st.container(key="sb_export_box")
+        boite_export.markdown('<div class="sb-export-title">Exporter</div>', unsafe_allow_html=True)
+        c_md, c_pdf = boite_export.columns(2, gap="small")
         with c_md:
             st.download_button(
                 ".md",
@@ -2061,8 +2418,7 @@ with st.sidebar:
                 unsafe_allow_html=True,
             )
             if st.button("Se connecter", key="sb_login", use_container_width=True):
-                st.session_state.show_auth_dialog = True
-                st.session_state.auth_email_step = "email"
+                ouvrir_connexion()
                 st.rerun()
         else:
             if st.button(
@@ -2110,7 +2466,7 @@ _traiter_actions_url()
 
 # Suggestion cliquée : démarrer tout de suite (évite le flash des chips d'accueil)
 _pending_sug = (st.session_state.pop("_sug", None) or "").strip()
-if _pending_sug and not st.session_state.en_cours and not st.session_state.get("force_login"):
+if _pending_sug and not st.session_state.en_cours:
     st.session_state.messages.append({
         "role": "user",
         "content": _pending_sug,
@@ -2186,25 +2542,10 @@ with col:
             with droite:
                 fichiers_msg = msg.get("fichiers", [])
                 with st.chat_message("user", avatar="user"):
-                    if fichiers_msg:
-                        for f in fichiers_msg:
-                            if f.get("type") == "image" and f.get("image_b64"):
-                                try:
-                                    import base64 as _b64img
-
-                                    st.image(
-                                        _b64img.b64decode(f["image_b64"]),
-                                        caption=f.get("nom") or "image",
-                                        use_container_width=True,
-                                    )
-                                except Exception:
-                                    st.caption(f"🖼 {f.get('nom')}")
-                            else:
-                                st.markdown(
-                                    f"`{icone_fichier(f['nom'])} {f['nom']}`"
-                                )
+                    for f in fichiers_msg or []:
+                        _afficher_piece_jointe(f)
                     st.markdown(msg["content"])
-                    _afficher_actions_message(msg_idx, msg.get("content", ""), "user")
+                _afficher_actions_message(msg_idx, msg.get("content", ""), "user")
         else:
             # IA à gauche
             gauche, _ = st.columns([5, 2])
@@ -2218,7 +2559,7 @@ with col:
                 score_rag_msg = msg.get("score_rag")
 
                 with st.chat_message("assistant", avatar="assistant"):
-                    st.markdown(msg["content"])
+                    st.markdown(nettoyer_reponse(msg["content"]))
                     for img in msg.get("images") or []:
                         b64 = img.get("b64")
                         if not b64:
@@ -2317,171 +2658,101 @@ with col:
     st.markdown('</div>', unsafe_allow_html=True)
 
 
-# ── INPUT + UPLOAD (composer flottant style Claude) ───────────────
-with col:
-    if st.session_state.fichiers_en_attente:
-        badges = "".join([
-            f'<span class="up-file"><span class="ufi">{icone_fichier(f["nom"])}</span>{html_lib.escape(f["nom"])}</span>'
-            for f in st.session_state.fichiers_en_attente
-        ])
-        st.markdown(f'<div class="upload-preview">{badges}</div>', unsafe_allow_html=True)
+# ── COMPOSER (st.chat_input : Entrée envoie, Maj+Entrée = retour à la ligne) ──
+def _journal_securite(action: str, gravite: str, details: str) -> None:
+    u = utilisateur_session() or {}
+    _users_db_auth().evenement_securite(action, gravite, details, acteur=u.get("id") or "")
 
-    if st.session_state.web_search_actif:
-        st.markdown(
-            '<div class="web-on"><span class="dot"></span> Recherche web</div>',
-            unsafe_allow_html=True,
+
+def _joindre_fichiers(fichiers_up) -> list:
+    """Pièces jointes soumises → fichiers traités ; les refusés sont signalés, jamais joints."""
+    joints = []
+    fichiers_up = list(fichiers_up or [])
+    # Le widget masque l'import aux invités ; le serveur le refuse aussi (requête forgée)
+    if fichiers_up and not est_compte_connecte():
+        _journal_securite("fichier_refuse", "moyenne", f"{len(fichiers_up)} fichier(s) envoyé(s) sans compte")
+        notifier("Connectez-vous pour joindre des fichiers.", "erreur")
+        return joints
+    if len(fichiers_up) > FICHIERS_MAX_PAR_MESSAGE:
+        notifier(
+            f"{len(fichiers_up) - FICHIERS_MAX_PAR_MESSAGE} fichier(s) ignoré(s) : "
+            f"au plus {FICHIERS_MAX_PAR_MESSAGE} pièces jointes par message.",
+            "avertissement",
         )
-
-    # Ligne composer : [+] | texte | ↑
-    c_plus, c_input, c_send = st.columns([1, 10, 1])
-
-    with c_plus:
-        with st.popover("＋", help="Ajouter"):
-            st.markdown('<div class="plus-menu">', unsafe_allow_html=True)
-
-            if not est_compte_connecte():
-                st.caption("Fichiers, photos et audio réservés aux comptes connectés.")
-                if st.button(
-                    "Se connecter pour joindre un fichier",
-                    use_container_width=True,
-                    key="plus_need_login",
-                ):
-                    st.session_state.show_auth_dialog = True
-                    st.session_state.auth_email_step = "email"
-                    st.rerun()
-            else:
-                if st.button(
-                    "📎  Ajouter des fichiers ou images",
-                    use_container_width=True,
-                    key="btn_files",
-                    type="secondary",
-                ):
-                    st.session_state.show_files = not st.session_state.get("show_files", False)
-                    st.session_state.show_camera = False
-                    st.session_state.show_audio = False
-                    st.rerun()
-
-                if st.button(
-                    "📷  Prendre une photo",
-                    use_container_width=True,
-                    key="btn_cam",
-                    type="secondary",
-                ):
-                    st.session_state.show_camera = not st.session_state.show_camera
-                    st.session_state.show_files = False
-                    st.session_state.show_audio = False
-                    st.rerun()
-
-                if st.button(
-                    "🎤  Enregistrer un audio",
-                    use_container_width=True,
-                    key="btn_aud",
-                    type="secondary",
-                ):
-                    st.session_state.show_audio = not st.session_state.show_audio
-                    st.session_state.show_files = False
-                    st.session_state.show_camera = False
-                    st.rerun()
-
-            st.markdown('<div class="plus-menu-sep"></div>', unsafe_allow_html=True)
-
-            web_actif = bool(st.session_state.web_search_actif)
-            web_label = "🌐  Recherche Web" + ("    ✓" if web_actif else "")
-            if st.button(
-                web_label,
-                use_container_width=True,
-                key="btn_web_toggle",
-                type="primary" if web_actif else "secondary",
-            ):
-                activer_recherche_web(not web_actif)
-                st.rerun()
-
-            st.markdown("</div>", unsafe_allow_html=True)
-
-    bloque_invite = bool(st.session_state.get("force_login"))
-    with c_input:
-        valeur = ""
-        question = st.text_input(
-            "q", value="",
-            placeholder=(
-                "Réflexion en cours…"
-                if st.session_state.en_cours
-                else (
-                    "Connectez-vous pour continuer…"
-                    if bloque_invite
-                    else "Poser une question…"
+        fichiers_up = fichiers_up[:FICHIERS_MAX_PAR_MESSAGE]
+    if not fichiers_up:
+        return joints
+    with st.spinner("Lecture des pièces jointes…"):
+        for f in fichiers_up:
+            t = traiter_fichier(f)
+            if t.get("erreur"):
+                _journal_securite(
+                    "fichier_refuse", "faible",
+                    f"Extension {Path(t['nom']).suffix.lower() or '(aucune)'} · "
+                    f"{taille_lisible(t.get('taille') or 0)} · {t['erreur'][:160]}",
                 )
-            ),
-            key=f"inp_{st.session_state.input_key}",
-            label_visibility="collapsed",
-            disabled=bloque_invite or st.session_state.en_cours,
-        )
-    with c_send:
-        envoyer = st.button(
-            "↑",
-            use_container_width=True,
-            key="btn_send",
-            disabled=bloque_invite or st.session_state.en_cours,
-        )
+                notifier(f"« {t['nom']} » non joint : {t['erreur']}", "erreur")
+            elif all(j["nom"] != t["nom"] for j in joints):
+                joints.append(t)
+    return joints
 
-    # Panneau fichiers (si demandé via +)
-    if est_compte_connecte() and st.session_state.get("show_files"):
-        fichiers_up = st.file_uploader(
-            "Ajouter des fichiers ou images",
-            accept_multiple_files=True,
-            type=None,
-            key=f"up_files_{st.session_state.input_key}",
-        )
-        if fichiers_up:
-            traites = [traiter_fichier(f) for f in fichiers_up]
-            existants = {f["nom"] for f in st.session_state.fichiers_en_attente}
-            ajoutés = 0
-            for t in traites:
-                if t["nom"] not in existants:
-                    st.session_state.fichiers_en_attente.append(t)
-                    ajoutés += 1
-            if ajoutés:
-                st.session_state.show_files = False
-                notifier(f"{ajoutés} fichier(s) ajouté(s).")
-                st.rerun()
 
-    # Panneau caméra (si demandé via +)
-    if est_compte_connecte() and st.session_state.show_camera:
-        photo = st.camera_input("Photo", key=f"cam_{st.session_state.input_key}")
-        if photo is not None:
-            traite = traiter_fichier(photo)
-            if all(f["nom"] != traite["nom"] for f in st.session_state.fichiers_en_attente):
-                st.session_state.fichiers_en_attente.append(traite)
-            st.session_state.show_camera = False
+def _transcrire(audio) -> str:
+    if not est_compte_connecte():
+        _journal_securite("fichier_refuse", "moyenne", "Audio envoyé sans compte")
+        notifier("Connectez-vous pour dicter une question.", "erreur")
+        return ""
+    with st.spinner("Transcription audio…"):
+        try:
+            return (transcrire_audio(audio) or "").strip()
+        except Exception as exc:
+            notifier(
+                message_erreur("La transcription a échoué.", exc, "Réessayez ou saisissez votre question."),
+                "erreur",
+            )
+            return ""
+
+
+connecte = est_compte_connecte()
+# Quota épuisé : la saisie reste possible, le serveur refuse la requête et propose la connexion
+composer_occupe = st.session_state.en_cours
+
+with col:
+    web_actif = bool(st.session_state.web_search_actif)
+    with st.container(horizontal=True, gap="small", vertical_alignment="center", key="composer_outils"):
+        if st.button(
+            "Recherche web",
+            key="btn_web_on" if web_actif else "btn_web_off",
+            icon=":material/check_circle:" if web_actif else ":material/language:",
+            type="tertiary",
+            help="Recherche web activée — cliquer pour la désactiver"
+            if web_actif
+            else "Compléter les réponses par une recherche web",
+            disabled=st.session_state.en_cours,
+        ):
+            activer_recherche_web(not web_actif)
             st.rerun()
-
-    # Panneau audio (si demandé via +)
-    if est_compte_connecte() and st.session_state.show_audio:
-        audio = st.audio_input(
-            "Enregistrer un message vocal",
-            key=f"aud_{st.session_state.input_key}",
-        )
-        if audio is not None:
-            with st.spinner("Transcription audio…"):
-                try:
-                    texte = transcrire_audio(audio)
-                except Exception as e:
-                    texte = ""
-                    afficher_avertissement(
-                        message_erreur(
-                            "La transcription a échoué.", e, "Réessayez ou saisissez votre question."
-                        )
-                    )
-            if texte:
-                st.session_state["_sug"] = texte
-                st.session_state.show_audio = False
+        if not connecte:
+            if st.button(
+                "Joindre un fichier",
+                key="plus_need_login",
+                icon=":material/attach_file:",
+                type="tertiary",
+                help="Fichiers, images et audio réservés aux comptes connectés",
+            ):
+                ouvrir_connexion()
                 st.rerun()
-            else:
-                # Garder l'audio comme pièce jointe si pas de texte
-                traite = traiter_fichier(audio)
-                st.session_state.fichiers_en_attente.append(traite)
-                st.session_state.show_audio = False
-                st.info("Audio joint (transcription vide).")
+
+    saisie = st.chat_input(
+        "Réflexion en cours…" if st.session_state.en_cours else "Poser une question…",
+        key=f"composer_{st.session_state.input_key}",
+        accept_file="multiple" if connecte else False,
+        # Les formats refusés restent sélectionnables : traiter_fichier() explique le refus au lieu d'un rejet muet
+        file_type=sorted(e.lstrip(".") for e in UPLOAD_EXTENSIONS_OK | set(UPLOAD_FORMATS_REFUSES)) if connecte else None,
+        max_upload_size=max(1, UPLOAD_MAX_BYTES // (1024 * 1024)) if connecte else None,
+        accept_audio=connecte,
+        disabled=composer_occupe,
+    )
 
     st.markdown(
         '<div class="composer-hint">AssistDoc peut se tromper. Vérifiez les informations importantes.</div>',
@@ -2490,13 +2761,24 @@ with col:
 
 
 # ── TRAITEMENT ────────────────────────────────────────────────────
-q_finale = (question if (envoyer and question.strip()) else None) or (valeur or None)
-if st.session_state.get("force_login"):
-    q_finale = None
+q_finale, fichiers_soumis = "", []
+if saisie is not None and not composer_occupe:
+    if isinstance(saisie, str):
+        q_finale = saisie.strip()
+    else:
+        q_finale = (saisie.text or "").strip()
+        fichiers_soumis = _joindre_fichiers(saisie.files)
+        if saisie.audio is not None:
+            q_finale = " ".join(p for p in (q_finale, _transcrire(saisie.audio)) if p)
+        if not q_finale and fichiers_soumis:
+            q_finale = "Analyse le contenu des fichiers joints."
+    if not q_finale:
+        # Rien d'exploitable (fichiers refusés, audio vide) : afficher les notifications
+        st.rerun()
 
-if q_finale and q_finale.strip() and not st.session_state.en_cours:
-    q        = q_finale.strip()
-    fichiers = st.session_state.fichiers_en_attente.copy()
+if q_finale and not st.session_state.en_cours:
+    q        = q_finale
+    fichiers = st.session_state.fichiers_en_attente + fichiers_soumis
 
     st.session_state.messages.append({
         "role": "user", "content": q, "fichiers": fichiers
@@ -2523,9 +2805,11 @@ if st.session_state.en_cours and st.session_state.messages:
     dernier_user = users[-1]
     q            = dernier_user["content"]
     fichiers_msg = dernier_user.get("fichiers", [])
+    a_un_fichier = bool(fichiers_msg)
+    # Question de suivi sans pièce jointe : les documents du message précédent restent en contexte
+    fichiers_contexte = fichiers_msg or fichiers_de_rappel(st.session_state.messages)
 
-    contexte_fichiers = formater_pour_prompt(fichiers_msg)
-    a_un_fichier      = bool(fichiers_msg)
+    contexte_fichiers = formater_pour_prompt(fichiers_msg, question=q, avec_regles=False)
 
     q_enrichie = q
     if contexte_fichiers:
@@ -2538,10 +2822,17 @@ if st.session_state.en_cours and st.session_state.messages:
 
     try:
         t0 = time.time()
-        ok_quota, msg_quota = consommer_requete(
-            {"question": (q or "")[:200], "avec_fichier": a_un_fichier}
-        )
+        # Un rerun pendant la génération (clic, fragment) ne doit pas décompter la question deux fois
+        if dernier_user.get("quota_decompte"):
+            ok_quota, msg_quota = True, ""
+        else:
+            ok_quota, msg_quota = consommer_requete(
+                {"question": (q or "")[:200], "avec_fichier": a_un_fichier}
+            )
+            dernier_user["quota_decompte"] = ok_quota
         if not ok_quota:
+            if st.session_state.historique_llm and st.session_state.historique_llm[-1].get("role") == "user":
+                st.session_state.historique_llm.pop()
             st.session_state.messages.append({
                 "role": "assistant",
                 "content": f"⏳ {msg_quota}",
@@ -2553,6 +2844,17 @@ if st.session_state.en_cours and st.session_state.messages:
             sync_discussion()
             st.session_state.en_cours = False
             st.rerun()
+
+        # Signal pour la supervision uniquement : la question n'est ni bloquée ni modifiée
+        for _source, _texte in [("question", q)] + [
+            (f"fichier {Path(f.get('nom') or '').suffix.lower()}", f.get("contenu") or "") for f in fichiers_msg
+        ]:
+            _motifs = detecter_injection(_texte)
+            if _motifs:
+                _journal_securite(
+                    "ia_injection_suspecte", "moyenne",
+                    f"Source : {_source} · " + ", ".join(_LIBELLES_INJECTION[m] for m in _motifs),
+                )
 
         salutation = (not a_un_fichier) and est_salutation(q)
 
@@ -2575,14 +2877,16 @@ if st.session_state.en_cours and st.session_state.messages:
         _label_spin = "Réflexion…"
         if demande_generation_image(q):
             _label_spin = "Génération de l'image…"
-        elif a_un_fichier and any(f.get("type") == "image" for f in fichiers_msg):
-            _label_spin = "Analyse de l'image…"
+        elif necessite_preparation(fichiers_contexte, q):
+            _label_spin = "Analyse des pièces jointes (images, pages numérisées, audio)…"
+        elif fichiers_contexte:
+            _label_spin = "Lecture des documents joints…"
 
         with st.spinner(_label_spin):
             resultat = st.session_state.orchestrateur.repondre(
                 question=q,
                 historique=st.session_state.historique_llm[:-1],
-                fichiers=fichiers_msg if a_un_fichier else None,
+                fichiers=fichiers_contexte or None,
                 filtres=filtres if (utiliser_corpus or not a_un_fichier) else None,
                 top_k=st.session_state.top_k,
                 stream=True,
@@ -2619,7 +2923,7 @@ if st.session_state.en_cours and st.session_state.messages:
                 gauche, _ = st.columns([5, 2])
                 with gauche:
                     with st.chat_message("assistant", avatar="assistant"):
-                        reponse_txt = st.write_stream(flux)
+                        reponse_txt = afficher_flux(flux)
                 # Journal après stream : contrôle qualité a posteriori, sans régénération
                 try:
                     holder = resultat.usage_holder or {}
@@ -2640,7 +2944,9 @@ if st.session_state.en_cours and st.session_state.messages:
                 except Exception:
                     pass
             else:
-                reponse_txt = resultat.reponse_seule or resultat.reponse or ""
+                reponse_txt = nettoyer_reponse(resultat.reponse_seule or resultat.reponse or "")
+            if str(reponse_txt or "").startswith("❌ Erreur"):
+                _journal_securite("ia_erreur", "faible", str(reponse_txt)[:200])
 
             citations = resultat.citations or ""
             if citations and "📚" not in (reponse_txt or "") and "🌐" not in (reponse_txt or ""):
@@ -2686,6 +2992,10 @@ if st.session_state.en_cours and st.session_state.messages:
                 st.session_state.historique_llm = st.session_state.historique_llm[-20:]
 
     except Exception as e:
+        try:
+            _journal_securite("ia_erreur", "faible", f"Génération interrompue : {type(e).__name__}")
+        except Exception:
+            pass
         st.session_state.messages.append({
             "role": "assistant",
             "content": message_erreur(

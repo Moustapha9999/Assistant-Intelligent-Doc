@@ -25,7 +25,7 @@ def _int_env(name: str, default: int) -> int:
 
 QUOTAS: Dict[str, QuotaTier] = {
     "guest": QuotaTier(
-        requetes_par_jour=_int_env("QUOTA_GUEST_REQ", 12),
+        requetes_par_jour=_int_env("QUOTA_GUEST_REQ", 5),
         minutes_session=_int_env("QUOTA_GUEST_MIN", 30),
         label="Invité (sans compte)",
     ),

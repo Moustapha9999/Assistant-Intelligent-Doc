@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import html
 import os
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -40,6 +41,7 @@ from app.auth_google import (
 from app import identite as _identite
 from app.quotas import quota_pour
 from app.ui_composants import afficher_erreur, journal, notifier
+from app.utilisateurs_sqlite import MSG_INVITES_SATURE, MSG_QUOTA_INVITE
 
 users_db = _identite.users_db
 _users_db = users_db
@@ -99,6 +101,7 @@ def exiger_admin(*, autoriser_login: bool = True) -> bool:
     if est_admin_session():
         return True
 
+    journaliser_acces_refuse("administration")
     afficher_erreur("Accès refusé : cette page est réservée aux administrateurs.")
     if est_compte_connecte():
         st.info(
@@ -127,13 +130,74 @@ _CLES_UI_AUTH = (
     "force_login", "show_auth_dialog",
     "auth_email_step", "auth_pending_email",
 )
+CLE_MFA = "auth_mfa_en_attente"
+DUREE_MFA_S = 300
 
 
-def _appliquer_user(user: Dict[str, Any]) -> None:
-    """Connexion réussie : rotation du jeton de session vers le compte authentifié."""
+def _origine_client() -> Optional[str]:
+    """Adresse IP du client si Streamlit la connaît (sert uniquement à limiter les tentatives)."""
+    try:
+        return st.context.ip_address or None
+    except Exception:
+        return None
+
+
+def _finaliser_connexion(user: Dict[str, Any]) -> None:
+    """Rotation du jeton de session vers le compte authentifié."""
+    st.session_state.pop(CLE_MFA, None)
     _identite.connecter(user)
     for k in _CLES_UI_AUTH:
         st.session_state.pop(k, None)
+
+
+def _appliquer_user(user: Dict[str, Any]) -> bool:
+    """Premier facteur validé. Si la MFA est active, la session n'est ouverte qu'après le code.
+
+    L'identifiant en attente reste dans l'état serveur de la session Streamlit : le navigateur
+    ne peut ni le choisir ni le modifier.
+    """
+    if user.get("totp_actif"):
+        st.session_state[CLE_MFA] = {"uid": user["id"], "expire": time.time() + DUREE_MFA_S}
+        st.session_state.show_auth_dialog = True
+        return False
+    _finaliser_connexion(user)
+    return True
+
+
+def _mfa_en_attente() -> Optional[str]:
+    attente = st.session_state.get(CLE_MFA)
+    if not attente:
+        return None
+    if attente.get("expire", 0) < time.time():
+        st.session_state.pop(CLE_MFA, None)
+        return None
+    return attente.get("uid")
+
+
+def _formulaire_mfa(uid: str, key_prefix: str) -> None:
+    st.markdown(
+        '<p class="auth-sub">Saisissez le code à 6 chiffres affiché par votre application '
+        "d'authentification.</p>",
+        unsafe_allow_html=True,
+    )
+    with st.form(f"{key_prefix}_form_mfa", border=False):
+        code = st.text_input(
+            "Code de vérification", max_chars=6, placeholder="123456",
+            label_visibility="collapsed", key=f"{key_prefix}_mfa_code",
+        )
+        valider = st.form_submit_button("Vérifier", type="primary", use_container_width=True)
+    if st.button("Annuler", key=f"{key_prefix}_mfa_annuler", use_container_width=True):
+        st.session_state.pop(CLE_MFA, None)
+        st.rerun()
+    if valider:
+        ok, msg = _users_db().verifier_totp(uid, code)
+        user = _users_db().obtenir(uid) if ok else None
+        if user and not user.get("suspended"):
+            _finaliser_connexion(user)
+            notifier("Connecté en administrateur." if user.get("tier") == "admin" else "Vous êtes connecté.")
+            st.rerun()
+        else:
+            afficher_erreur(msg)
 
 
 def assurer_session_invite() -> Dict[str, Any]:
@@ -146,9 +210,18 @@ def assurer_session_invite() -> Dict[str, Any]:
 
 
 def deconnecter() -> None:
-    for k in _CLES_UI_AUTH:
+    for k in (*_CLES_UI_AUTH, CLE_MFA):
         st.session_state.pop(k, None)
     _identite.deconnecter()
+
+
+def journaliser_acces_refuse(ressource: str) -> None:
+    u = utilisateur_session() or {}
+    _users_db().evenement_securite(
+        "acces_refuse", "moyenne",
+        f"Accès à « {ressource} » refusé (rôle : {u.get('tier') or 'guest'})",
+        acteur=u.get("id") or "",
+    )
 
 
 def _oauth_lier_session() -> bool:
@@ -171,7 +244,17 @@ def _redirect_oauth() -> str:
 
 def _echec_oauth(fournisseur: str, detail: str) -> None:
     journal.warning("Échec OAuth %s : %s", fournisseur, detail)
+    _users_db().evenement_securite("oauth_echec", "faible", f"{fournisseur} : {detail}"[:300])
     afficher_erreur(f"La connexion avec {fournisseur} a échoué.", conseil="Recommencez la connexion.")
+
+
+def _connexion_oauth(user: Dict[str, Any], fournisseur: str) -> None:
+    _users_db().evenement_securite(
+        "auth_succes", "info", f"Connexion {fournisseur} vérifiée", acteur=user["id"]
+    )
+    if _appliquer_user(user):
+        notifier(f"Connecté avec {fournisseur}.")
+    st.rerun()
 
 
 def _traiter_callback_oauth() -> None:
@@ -233,9 +316,7 @@ def _traiter_callback_oauth() -> None:
             email=profile.get("email"),
             display_name=str(apple_name or ""),
         )
-        _appliquer_user(user)
-        notifier("Connecté avec Apple.")
-        st.rerun()
+        _connexion_oauth(user, "Apple")
         return
 
     if provider == "google":
@@ -255,9 +336,7 @@ def _traiter_callback_oauth() -> None:
             email=profile.get("email"),
             display_name=profile.get("name") or "",
         )
-        _appliquer_user(user)
-        notifier("Connecté avec Google.")
-        st.rerun()
+        _connexion_oauth(user, "Google")
         return
 
     if provider == "github":
@@ -277,9 +356,7 @@ def _traiter_callback_oauth() -> None:
             profile["github_login"],
             email=profile.get("email"),
         )
-        _appliquer_user(user)
-        notifier("Connecté avec GitHub.")
-        st.rerun()
+        _connexion_oauth(user, "GitHub")
         return
 
 
@@ -366,6 +443,13 @@ def _contenu_modal_auth(
     if inject_css:
         _css_modal_auth(page_gate=False)
 
+    uid_mfa = _mfa_en_attente()
+    if uid_mfa:
+        if show_title:
+            st.markdown('<p class="auth-card-title">Vérification en deux étapes</p>', unsafe_allow_html=True)
+        _formulaire_mfa(uid_mfa, key_prefix)
+        return
+
     if show_title:
         st.markdown(
             '<p class="auth-card-title">Connectez-vous ou inscrivez-vous</p>',
@@ -373,10 +457,7 @@ def _contenu_modal_auth(
         )
 
     if force:
-        st.caption(
-            f"Limite invité atteinte ({quota_pour('guest').requetes_par_jour} prompts/jour). "
-            "Connectez-vous pour continuer."
-        )
+        st.caption(MSG_QUOTA_INVITE.format(n=quota_pour("guest").requetes_par_jour))
 
     st.markdown(
         '<p class="auth-sub">Vous recevrez des réponses plus intelligentes et pourrez '
@@ -455,20 +536,23 @@ def _contenu_modal_auth(
 
     st.markdown('<div class="auth-ou-wrap">ou</div>', unsafe_allow_html=True)
 
+    # Formulaires : Entrée dans le champ valide l'étape (sans souris)
     etape = st.session_state.get("auth_email_step", "email")
     if etape == "email":
-        email = st.text_input(
-            "Email",
-            placeholder="Email address",
-            label_visibility="collapsed",
-            key=f"{key_prefix}_email",
-        )
-        if st.button(
-            "Continuer",
-            type="primary",
-            use_container_width=True,
-            key=f"{key_prefix}_email_go",
-        ):
+        with st.form(f"{key_prefix}_form_email", border=False):
+            email = st.text_input(
+                "Email",
+                placeholder="Email address",
+                label_visibility="collapsed",
+                key=f"{key_prefix}_email",
+            )
+            continuer = st.form_submit_button(
+                "Continuer",
+                type="primary",
+                use_container_width=True,
+                key=f"{key_prefix}_email_go",
+            )
+        if continuer:
             email = (email or "").strip().lower()
             if "@" not in email:
                 afficher_erreur("Entrez une adresse e-mail valide.")
@@ -486,44 +570,64 @@ def _contenu_modal_auth(
             st.session_state.auth_email_step = "email"
             st.rerun()
 
-        password = st.text_input(
-            "Mot de passe",
-            type="password",
-            placeholder="Mot de passe (min. 6 caractères)",
-            label_visibility="collapsed",
-            key=f"{key_prefix}_pwd",
-        )
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("Se connecter", use_container_width=True, key=f"{key_prefix}_login"):
-                user, msg = _users_db().connecter_email(email, password)
-                if user:
-                    _appliquer_user(user)
+        # Entrée déclenche le premier bouton du formulaire : « Se connecter »
+        with st.form(f"{key_prefix}_form_pwd", border=False):
+            password = st.text_input(
+                "Mot de passe",
+                type="password",
+                placeholder="Mot de passe (min. 8 caractères)",
+                label_visibility="collapsed",
+                key=f"{key_prefix}_pwd",
+            )
+            c1, c2 = st.columns(2)
+            with c1:
+                connexion = st.form_submit_button(
+                    "Se connecter", use_container_width=True, key=f"{key_prefix}_login"
+                )
+            with c2:
+                inscription = st.form_submit_button(
+                    "Créer un compte",
+                    type="primary",
+                    use_container_width=True,
+                    key=f"{key_prefix}_reg",
+                )
+        if connexion:
+            user, msg = _users_db().connecter_email(email, password, origine=_origine_client())
+            if user:
+                if _appliquer_user(user):
                     notifier(
                         "Connecté en administrateur."
                         if user.get("tier") == "admin"
                         else "Vous êtes connecté."
                     )
-                    st.rerun()
-                else:
-                    afficher_erreur(msg)
-        with c2:
-            if st.button(
-                "Créer un compte",
-                type="primary",
-                use_container_width=True,
-                key=f"{key_prefix}_reg",
-            ):
-                user, msg = _users_db().inscrire_email(email, password)
-                if user:
-                    _appliquer_user(user)
-                    notifier("Compte créé. Bienvenue !")
-                    st.rerun()
-                else:
-                    afficher_erreur(msg)
+                st.rerun()
+            else:
+                afficher_erreur(msg)
+        elif inscription:
+            user, msg = _users_db().inscrire_email(email, password)
+            if user:
+                _appliquer_user(user)
+                notifier("Compte créé. Bienvenue !")
+                st.rerun()
+            else:
+                afficher_erreur(msg)
 
 
-@st.dialog("Connectez-vous ou inscrivez-vous")
+def ouvrir_connexion(quota_atteint: bool = False) -> None:
+    """Seuls déclencheurs : un clic de l'utilisateur ou une requête refusée pour quota."""
+    st.session_state.show_auth_dialog = True
+    st.session_state.auth_email_step = "email"
+    if quota_atteint:
+        st.session_state.force_login = True
+
+
+def fermer_connexion() -> None:
+    """Fermeture (croix, Échap, clic extérieur) : la boîte ne se rouvre qu'à la prochaine action."""
+    for cle in ("show_auth_dialog", "force_login", CLE_MFA):
+        st.session_state.pop(cle, None)
+
+
+@st.dialog("Connectez-vous ou inscrivez-vous", on_dismiss=fermer_connexion)
 def _dialog_auth_modal(force: bool = False) -> None:
     _contenu_modal_auth(force=force, show_title=False, key_prefix="modal")
 
@@ -572,23 +676,19 @@ def barre_auth_top() -> None:
     _g, b1, b2 = st.columns([8, 1, 1], gap="small")
     with b1:
         if st.button("Se connecter", key="top_login", use_container_width=True):
-            st.session_state.show_auth_dialog = True
-            st.session_state.auth_email_step = "email"
+            ouvrir_connexion()
             st.rerun()
     with b2:
         if st.button("Inscription", key="top_signup", type="primary", use_container_width=True):
-            st.session_state.show_auth_dialog = True
-            st.session_state.auth_email_step = "email"
+            ouvrir_connexion()
             st.rerun()
 
 
 def afficher_dialog_auth_si_besoin() -> None:
-    """Ouvre le modal st.dialog (Inscription / Se connecter / quota)."""
-    force = bool(st.session_state.get("force_login"))
-    show = bool(st.session_state.get("show_auth_dialog")) or force
-    if not show or est_compte_connecte():
+    """Ouvre le modal st.dialog (Inscription / Se connecter / quota) s'il a été demandé."""
+    if not st.session_state.get("show_auth_dialog") or est_compte_connecte():
         return
-    _dialog_auth_modal(force=force)
+    _dialog_auth_modal(force=bool(st.session_state.get("force_login")))
 
 
 def barre_compte_sidebar() -> None:
@@ -612,8 +712,7 @@ def barre_auth_sidebar_bas() -> None:
     st.divider()
     if u.get("tier") == "guest":
         if st.button("Se connecter / S'inscrire", key="sb_login", use_container_width=True):
-            st.session_state.show_auth_dialog = True
-            st.session_state.auth_email_step = "email"
+            ouvrir_connexion()
             st.rerun()
     else:
         if st.button("Se déconnecter", key="btn_logout", use_container_width=True):
@@ -623,16 +722,18 @@ def barre_auth_sidebar_bas() -> None:
 
 
 def consommer_requete(meta: Optional[Dict] = None) -> tuple[bool, str]:
+    """Décompte serveur d'une requête (contrôle et enregistrement atomiques).
+    Pour un invité, un refus ouvre la boîte de connexion avec l'explication."""
     u = assurer_session_invite()
-    ok, msg = _users_db().verifier_quota(u)
+    ok, msg = _users_db().reserver_requete(u, meta or {})
     if not ok:
-        if (u.get("tier") or "guest") == "guest":
-            st.session_state.force_login = True
-            st.session_state.show_auth_dialog = True
-            return (
-                False,
-                "Limite invité atteinte. Connectez-vous avec votre email ou GitHub pour continuer.",
-            )
-        return False, msg
-    _users_db().enregistrer_usage(u["id"], "ask", meta or {})
-    return True, msg
+        tier = u.get("tier") or "guest"
+        sature = msg == MSG_INVITES_SATURE
+        _users_db().evenement_securite(
+            "quota_global_invites" if sature else "quota_depasse",
+            "moyenne" if sature else "faible",
+            f"Requête refusée (rôle : {tier})", acteur=u.get("id") or "",
+        )
+        if tier == "guest":
+            ouvrir_connexion(quota_atteint=not sature)
+    return ok, msg

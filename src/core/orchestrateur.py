@@ -14,6 +14,7 @@ from core.journal_amelioration import JournalAmelioration
 from core.memoire_longue import MemoireLongue
 from core.memoire_projet import MemoireProjet
 from core.memoire_reponse import MemoireReponse
+from core.nettoyage_reponse import nettoyer_reponse
 from core.schemas import AnalyseQuestion, ResultatOrchestration
 from core.planificateur import PlanificateurAssistant
 from generation.llm_client import LLMClient
@@ -75,18 +76,20 @@ class OrchestrateurAssistant:
     ) -> ResultatOrchestration:
         """`user_id` : identité validée côté serveur ; sans elle, pas de mémoire long terme."""
         historique = historique or []
-        fichiers = fichiers or []
-        # Vision réelle : analyser les images avant classification / prompt
-        if any(f.get("type") == "image" and f.get("image_b64") for f in fichiers):
-            try:
-                from app.gestionnaire_fichiers import analyser_images_vision
+        fichiers_contexte = fichiers or []
+        # Pièces jointes rappelées d'un message précédent : contexte seulement, sans
+        # changer le mode, forcer le RAG ni bloquer l'abstention
+        fichiers = [f for f in fichiers_contexte if not f.get("rappel")]
+        from app.gestionnaire_fichiers import necessite_preparation, preparer_contenus_multimodaux
 
-                fichiers = analyser_images_vision(
-                    fichiers, question=question, llm_client=self.llm_client
+        if necessite_preparation(fichiers_contexte, question):
+            try:
+                preparer_contenus_multimodaux(
+                    fichiers_contexte, question=question, llm_client=self.llm_client
                 )
-            except Exception:
-                pass
-        contexte_fichiers = self._formater_fichiers(fichiers)
+            except Exception as exc:
+                print(f"   ⚠️  Préparation des pièces jointes : {type(exc).__name__}")
+        contexte_fichiers = self._formater_fichiers(fichiers_contexte, question)
 
         # Génération d'image (hors pipeline RAG)
         from generation.generateur_reponse import demande_generation_image
@@ -100,8 +103,13 @@ class OrchestrateurAssistant:
             )
 
         # Passe 1 — compréhension / classification
+        from app.gestionnaire_fichiers import formater_pour_prompt
+
+        contexte_classif = formater_pour_prompt(
+            fichiers, question=question, max_chars=3000, avec_regles=False
+        )
         analyse = self.classificateur.analyser(
-            question=question if not contexte_fichiers else f"{question}\n{contexte_fichiers}",
+            question=question if not contexte_classif else f"{question}\n{contexte_classif}",
             mode_force=mode_force,
             a_un_fichier=bool(fichiers),
         )
@@ -148,12 +156,18 @@ class OrchestrateurAssistant:
         ressources_web: List[Dict] = []
 
         if faire_rag:
-            documents = self.retrieval.rechercher(
-                question,
-                top_k_retrieval=20,
-                top_k_final=top_k,
-                filtres=filtres,
-            )
+            try:
+                documents = self.retrieval.rechercher(
+                    question,
+                    top_k_retrieval=20,
+                    top_k_final=top_k,
+                    filtres=filtres,
+                )
+            except Exception as exc:
+                # Base vectorielle injoignable : les pièces jointes restent exploitables
+                print(f"   ⚠️  Recherche corpus indisponible : {type(exc).__name__}")
+                analyse.notes = list(analyse.notes) + ["rag_indisponible"]
+                documents = []
             documents = [enrichir_document(d) for d in documents]
             # Jeter les hits faibles / hors sujet (ex. Next.js pour une quincaillerie)
             avant = len(documents)
@@ -164,6 +178,14 @@ class OrchestrateurAssistant:
 
         # Vérification RAG → web si insuffisant
         faire_web = self._ajuster_web_apres_rag(analyse, question, documents, faire_web)
+        # Question sur les pièces jointes : le web n'apporte que du bruit, sauf demande explicite
+        if (
+            fichiers_contexte
+            and not documents
+            and analyse.mode != "perplexity"
+            and not any(s in (question or "").lower() for s in _SIGNES_WEB_PRIORITAIRE)
+        ):
+            faire_web = False
         # Mode Perplexity : forcer web
         if analyse.mode == "perplexity":
             faire_web = True
@@ -270,7 +292,7 @@ class OrchestrateurAssistant:
                     rapport = self.controleur_qualite.verifier(texte, analyse, plan, question=question)
                 except Exception:
                     rapport = None
-                resultat.reponse_seule = texte.strip()
+                resultat.reponse_seule = nettoyer_reponse(texte)
                 resultat.rapport_qualite = rapport
                 resultat.meta_journal["score_qualite"] = getattr(rapport, "score", None)
                 resultat.meta_journal["qualite_valide"] = getattr(rapport, "valide", None)
@@ -355,7 +377,8 @@ class OrchestrateurAssistant:
                 f"{rapport.commentaire} (régénération×{tentatives})"
             ).strip()
 
-        reponse_complete = reponse.strip()
+        reponse = nettoyer_reponse(reponse)
+        reponse_complete = reponse
         if citations and "📚" not in reponse_complete and "🌐" not in reponse_complete:
             reponse_complete += "\n\n---\n\n" + citations
 
@@ -668,20 +691,10 @@ class OrchestrateurAssistant:
             return "web"
         return "aucune"
 
-    def _formater_fichiers(self, fichiers: List[Dict]) -> str:
-        if not fichiers:
-            return ""
-        blocs = []
-        for f in fichiers:
-            nom = f.get("nom", "fichier")
-            contenu = f.get("contenu", "")
-            langage = f.get("langage", "texte")
-            if f.get("type") == "image" and contenu:
-                tag = "image analysée" if f.get("vision_ok") else "image"
-                blocs.append(f"[{nom} | {tag}]\n{contenu[:4000]}")
-            elif contenu:
-                blocs.append(f"[{nom} | {langage}]\n{contenu[:4000]}")
-        return "\n\n".join(blocs)
+    def _formater_fichiers(self, fichiers: List[Dict], question: str = "") -> str:
+        from app.gestionnaire_fichiers import formater_pour_prompt
+
+        return formater_pour_prompt(fichiers, question=question)
 
     def _construire_citations(self, documents: List[Dict], ressources: List[Dict]) -> str:
         """Compat : délègue au formateur expert."""

@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]  # .../Assistant-Intelligent-Doc
 sys.path.insert(0, str(ROOT / "src"))
 
 from app import admin_corpus
+from app import admin_securite
 from app import runtime_config
 import app.auth_basique as _auth_basique
 
@@ -66,6 +67,7 @@ def _exiger_admin_page() -> None:
     exiger_auth()
     if est_admin_session():
         return
+    _auth_basique.journaliser_acces_refuse("administration")
     st.error("Accès refusé — réservé aux administrateurs.")
     if est_compte_connecte():
         st.info(
@@ -585,6 +587,14 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
     if st.button(
+        "Modifier mon mot de passe",
+        key="admin_mdp",
+        icon=":material/key:",
+        use_container_width=True,
+    ):
+        admin_securite.fermer_mot_de_passe()
+        st.session_state[admin_securite.CLE_MDP_OUVERT] = True
+    if st.button(
         "Se déconnecter",
         key="admin_logout",
         icon=":material/logout:",
@@ -595,6 +605,9 @@ with st.sidebar:
         notifier("Vous êtes déconnecté.", "info")
         _aller_accueil()
     st.markdown("</div>", unsafe_allow_html=True)
+
+if st.session_state.get(admin_securite.CLE_MDP_OUVERT) and not _demande_admin:
+    admin_securite.dialogue_mot_de_passe(db, _auth_basique._identite.jeton_session_courant() or "")
 
 st.markdown(
     f"""
@@ -654,6 +667,7 @@ modules = st.tabs(
         ":material/database: Corpus",
         ":material/settings: Paramètres IA",
         ":material/description: Audit",
+        ":material/security: Sécurité",
     ]
 )
 
@@ -1016,7 +1030,7 @@ with modules[4]:
         q1, q2, q3 = st.columns(3)
         with q1:
             q_guest = st.number_input(
-                "Invité", min_value=1, max_value=500, value=int(cfg.get("QUOTA_GUEST_REQ", 12))
+                "Invité", min_value=1, max_value=500, value=int(cfg.get("QUOTA_GUEST_REQ", 5))
             )
         with q2:
             q_email = st.number_input(
@@ -1059,9 +1073,49 @@ with modules[4]:
 
 # ── Module Audit ────────────────────────────────────────────────
 with modules[5]:
-    _entete_module("Journal des actions admin", "Historique des actions admin.", "audit")
-    for a in db.lister_audit(80):
-        st.markdown(
-            f"`{str(a.get('cree_le') or '')[:19]}` · **{_esc(a.get('action'))}** · "
-            f"{_esc(a.get('details'))}"
+    _entete_module(
+        "Journal d'audit",
+        "Actions d'administration et événements de sécurité — en ajout seul, chaîné par empreintes.",
+        "audit",
+    )
+    integrite = db.verifier_journal()
+    if integrite["valide"]:
+        st.caption(
+            f"Intégrité vérifiée : {integrite['total']} entrée(s), chaîne d'empreintes intacte"
+            + (f" ({integrite['non_chainees']} antérieure(s) au chaînage)." if integrite["non_chainees"] else ".")
         )
+    else:
+        afficher_erreur(
+            f"Chaîne d'empreintes rompue à l'entrée #{integrite['premiere_anomalie']} : "
+            "une entrée a été modifiée ou supprimée hors de l'application."
+        )
+    categorie_audit = st.selectbox(
+        "Catégorie", ["Toutes", "Administration", "Sécurité"], key="audit_categorie"
+    )
+    entrees = db.lister_audit(
+        200, categorie={"Administration": "admin", "Sécurité": "securite"}.get(categorie_audit)
+    )
+    if not entrees:
+        st.info("Aucune entrée.")
+    else:
+        st.dataframe(
+            [
+                {
+                    "Date (UTC)": str(a.get("cree_le") or "")[:19].replace("T", " "),
+                    "Catégorie": a.get("categorie"),
+                    "Gravité": a.get("gravite"),
+                    "Action": admin_securite.libelle_type(a.get("action") or ""),
+                    "Détail": a.get("details") or "",
+                    "Acteur": (a.get("admin_id") or "—")[:12],
+                }
+                for a in entrees
+            ],
+            hide_index=True,
+            use_container_width=True,
+        )
+
+# ── Module Sécurité ─────────────────────────────────────────────
+with modules[6]:
+    admin_securite.afficher(
+        db, admin, _auth_basique._identite.jeton_session_courant() or "", _entete_module
+    )

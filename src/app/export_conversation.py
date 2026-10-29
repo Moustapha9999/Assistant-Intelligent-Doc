@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from core.nettoyage_reponse import nettoyer_reponse
+
 
 def _utc_now_label() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -41,7 +43,7 @@ def _stats(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def _nettoyer_texte(texte: str) -> str:
-    return (texte or "").strip()
+    return nettoyer_reponse(texte or "")
 
 
 def _lignes_sources(docs: List[Dict[str, Any]], limite: int = 10) -> List[str]:

@@ -86,6 +86,30 @@ def afficher_avertissement(message: str) -> None:
     st.warning(message, icon=NIVEAUX["avertissement"][0])
 
 
+# ── Réponses de l'assistant ──────────────────────────────────────────────────
+
+
+def afficher_flux(flux, intervalle_s: float = 0.05) -> str:
+    """Affiche une réponse streamée au fil de l'eau, déjà nettoyée (les éléments techniques
+    incomplets en fin de flux sont masqués) ; renvoie le texte final nettoyé."""
+    import time
+
+    import streamlit as st
+
+    from core.nettoyage_reponse import nettoyer_reponse
+
+    zone = st.empty()
+    brut, dernier = "", 0.0
+    for delta in flux:
+        brut += delta or ""
+        if time.monotonic() - dernier >= intervalle_s:
+            zone.markdown(nettoyer_reponse(brut, partiel=True))
+            dernier = time.monotonic()
+    final = nettoyer_reponse(brut)
+    zone.markdown(final)
+    return final
+
+
 # ── Confirmations ────────────────────────────────────────────────────────────
 
 
