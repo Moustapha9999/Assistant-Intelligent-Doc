@@ -56,9 +56,11 @@ from app.auth_basique import (
     est_admin_session,
     est_compte_connecte,
     exiger_auth,
+    users_db as _users_db_auth,
     utilisateur_courant,
     utilisateur_session,
 )
+from securite.injection import LIBELLES as _LIBELLES_INJECTION, detecter as detecter_injection
 from app import export_conversation as _export_conversation
 
 importlib.reload(_export_conversation)
@@ -2656,10 +2658,20 @@ with col:
 
 
 # ── COMPOSER (st.chat_input : Entrée envoie, Maj+Entrée = retour à la ligne) ──
+def _journal_securite(action: str, gravite: str, details: str) -> None:
+    u = utilisateur_session() or {}
+    _users_db_auth().evenement_securite(action, gravite, details, acteur=u.get("id") or "")
+
+
 def _joindre_fichiers(fichiers_up) -> list:
     """Pièces jointes soumises → fichiers traités ; les refusés sont signalés, jamais joints."""
     joints = []
     fichiers_up = list(fichiers_up or [])
+    # Le widget masque l'import aux invités ; le serveur le refuse aussi (requête forgée)
+    if fichiers_up and not est_compte_connecte():
+        _journal_securite("fichier_refuse", "moyenne", f"{len(fichiers_up)} fichier(s) envoyé(s) sans compte")
+        notifier("Connectez-vous pour joindre des fichiers.", "erreur")
+        return joints
     if len(fichiers_up) > FICHIERS_MAX_PAR_MESSAGE:
         notifier(
             f"{len(fichiers_up) - FICHIERS_MAX_PAR_MESSAGE} fichier(s) ignoré(s) : "
@@ -2673,6 +2685,11 @@ def _joindre_fichiers(fichiers_up) -> list:
         for f in fichiers_up:
             t = traiter_fichier(f)
             if t.get("erreur"):
+                _journal_securite(
+                    "fichier_refuse", "faible",
+                    f"Extension {Path(t['nom']).suffix.lower() or '(aucune)'} · "
+                    f"{taille_lisible(t.get('taille') or 0)} · {t['erreur'][:160]}",
+                )
                 notifier(f"« {t['nom']} » non joint : {t['erreur']}", "erreur")
             elif all(j["nom"] != t["nom"] for j in joints):
                 joints.append(t)
@@ -2680,6 +2697,10 @@ def _joindre_fichiers(fichiers_up) -> list:
 
 
 def _transcrire(audio) -> str:
+    if not est_compte_connecte():
+        _journal_securite("fichier_refuse", "moyenne", "Audio envoyé sans compte")
+        notifier("Connectez-vous pour dicter une question.", "erreur")
+        return ""
     with st.spinner("Transcription audio…"):
         try:
             return (transcrire_audio(audio) or "").strip()
@@ -2819,6 +2840,17 @@ if st.session_state.en_cours and st.session_state.messages:
             st.session_state.en_cours = False
             st.rerun()
 
+        # Signal pour la supervision uniquement : la question n'est ni bloquée ni modifiée
+        for _source, _texte in [("question", q)] + [
+            (f"fichier {Path(f.get('nom') or '').suffix.lower()}", f.get("contenu") or "") for f in fichiers_msg
+        ]:
+            _motifs = detecter_injection(_texte)
+            if _motifs:
+                _journal_securite(
+                    "ia_injection_suspecte", "moyenne",
+                    f"Source : {_source} · " + ", ".join(_LIBELLES_INJECTION[m] for m in _motifs),
+                )
+
         salutation = (not a_un_fichier) and est_salutation(q)
 
         mode_force = None
@@ -2908,6 +2940,8 @@ if st.session_state.en_cours and st.session_state.messages:
                     pass
             else:
                 reponse_txt = resultat.reponse_seule or resultat.reponse or ""
+            if str(reponse_txt or "").startswith("❌ Erreur"):
+                _journal_securite("ia_erreur", "faible", str(reponse_txt)[:200])
 
             citations = resultat.citations or ""
             if citations and "📚" not in (reponse_txt or "") and "🌐" not in (reponse_txt or ""):
@@ -2953,6 +2987,10 @@ if st.session_state.en_cours and st.session_state.messages:
                 st.session_state.historique_llm = st.session_state.historique_llm[-20:]
 
     except Exception as e:
+        try:
+            _journal_securite("ia_erreur", "faible", f"Génération interrompue : {type(e).__name__}")
+        except Exception:
+            pass
         st.session_state.messages.append({
             "role": "assistant",
             "content": message_erreur(

@@ -18,7 +18,7 @@ def test_inscription_et_quota(tmp_path, monkeypatch):
     monkeypatch.setenv("ADMIN_PASSWORD", "secretadmin")
     monkeypatch.setenv("ADMIN_EMAIL", "admin@test.local")
     db = UtilisateursSQLite(tmp_path / "users.db")
-    user, msg = db.inscrire_email("alice@test.com", "abcdef", "Alice")
+    user, msg = db.inscrire_email("alice@test.com", "abcdefgh", "Alice")
     assert user is not None
     assert user["tier"] == "email"
     ok, _ = db.verifier_quota(user)
@@ -44,10 +44,11 @@ def test_invite_et_github_upsert(tmp_path, monkeypatch):
 def test_admin_suspend_tier(tmp_path, monkeypatch):
     monkeypatch.setenv("ADMIN_PASSWORD", "secretadmin")
     db = UtilisateursSQLite(tmp_path / "users3.db")
-    user, _ = db.inscrire_email("bob@test.com", "abcdef", "Bob")
-    assert db.set_tier(user["id"], "github", admin_id="admin")
+    admin = next(u for u in db.lister_users() if u["tier"] == "admin")
+    user, _ = db.inscrire_email("bob@test.com", "abcdefgh", "Bob")
+    assert db.set_tier(user["id"], "github", admin_id=admin["id"])
     assert db.obtenir(user["id"])["tier"] == "github"
-    assert db.suspendre(user["id"], True, admin_id="admin")
+    assert db.suspendre(user["id"], True, admin_id=admin["id"])
     ok, msg = db.verifier_quota(db.obtenir(user["id"]))
     assert ok is False
     assert "suspendu" in msg.lower()

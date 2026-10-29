@@ -8,6 +8,7 @@ from typing import Dict, List, Optional
 from core.gestionnaire_modes import obtenir_mode
 from core.schemas import AnalyseQuestion, PlanReponse
 from retrieval.contexte import resume_contexte_global
+from securite.injection import REGLE_SYSTEME, encadrer
 from web.ressources import sources_web_reelles
 
 
@@ -55,9 +56,13 @@ class ConstructeurPrompt:
                 prefs_txt,
                 prefs_lt,
                 insights,
+                REGLE_SYSTEME,
             ]
             if bloc and bloc.strip()
         )
+        contexte_fichiers = encadrer("fichiers joints", contexte_fichiers)
+        docs_txt = encadrer("corpus", docs_txt) if documents else docs_txt
+        web_txt = encadrer("web", web_txt) if ressources_web else web_txt
         user_prompt = f"""Question utilisateur :
 {question}
 

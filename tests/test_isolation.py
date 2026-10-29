@@ -209,9 +209,12 @@ def test_connexion_puis_deconnexion_sans_melange(bases):
 
 def test_compte_suspendu_perd_sa_session(bases):
     users, _, _ = bases
+    admin = users.upsert_github("1", "admin")
+    with sqlite3.connect(users.chemin) as conn:
+        conn.execute("UPDATE users SET tier = 'admin' WHERE id = ?", (admin["id"],))
     compte = users.upsert_github("9", "x")
     jeton = users.creer_session(compte["id"])
-    users.suspendre(compte["id"], True)
+    assert users.suspendre(compte["id"], True, admin_id=admin["id"])
     assert users.valider_session(jeton) is None
 
 

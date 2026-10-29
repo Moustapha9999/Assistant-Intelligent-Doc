@@ -27,7 +27,7 @@ ROOT_PROJECT = ROOT_SRC.parent
 if str(ROOT_SRC) not in sys.path:
     sys.path.insert(0, str(ROOT_SRC))
 
-from api.auth import exiger_admin_api, exiger_api_key, verifier_secret_webhook
+from api.auth import exiger_admin_api, exiger_api_key, limiter, verifier_secret_webhook
 from app.historique_sqlite import HistoriqueSQLite
 from core.orchestrateur import OrchestrateurAssistant
 from securite.acces import AccesRefuse
@@ -132,6 +132,7 @@ def ask(
     requete: QuestionRequest,
     owner: str = Depends(exiger_api_key),
 ) -> dict[str, Any]:
+    limiter(owner)
     try:
         resultat = orchestrateur().repondre(
             question=requete.question,
@@ -155,7 +156,8 @@ def ask(
             },
         }
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Service RAG indisponible : {exc}") from exc
+        print(f"   ⚠️  /ask : {type(exc).__name__}")
+        raise HTTPException(status_code=503, detail="Service RAG indisponible.") from None
 
 
 @app.post("/feedback")
@@ -163,6 +165,7 @@ def feedback(
     payload: FeedbackRequest,
     owner: str = Depends(exiger_api_key),
 ) -> dict[str, str]:
+    limiter(owner)
     proprietaire = proprietaire_api(owner)
     if proprietaire is None:
         if payload.conversation_id:
