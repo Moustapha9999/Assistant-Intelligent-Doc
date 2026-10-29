@@ -23,7 +23,14 @@ est_demande_projet = _generateur_reponse.est_demande_projet
 est_cahier_des_charges = _generateur_reponse.est_cahier_des_charges
 est_salutation = _generateur_reponse.est_salutation
 from core.orchestrateur import OrchestrateurAssistant
-from app.gestionnaire_fichiers import traiter_fichier, formater_pour_prompt, transcrire_audio
+from app.gestionnaire_fichiers import (
+    fichiers_de_rappel,
+    formater_pour_prompt,
+    necessite_preparation,
+    taille_lisible,
+    traiter_fichier,
+    transcrire_audio,
+)
 from app.historique_sqlite import HistoriqueSQLite
 from app.favoris_sqlite import FavorisSQLite
 from app.identite import identite_session
@@ -57,7 +64,13 @@ from app import export_conversation as _export_conversation
 importlib.reload(_export_conversation)
 export_markdown = _export_conversation.export_markdown
 export_pdf = _export_conversation.export_pdf
-from config import DATE_COLLECTE_GITHUB, UPLOAD_EXTENSIONS_OK, UPLOAD_MAX_BYTES
+from config import (
+    DATE_COLLECTE_GITHUB,
+    FICHIERS_MAX_PAR_MESSAGE,
+    UPLOAD_EXTENSIONS_OK,
+    UPLOAD_FORMATS_REFUSES,
+    UPLOAD_MAX_BYTES,
+)
 from retrieval.citations import citation_courte, determiner_provenance, enrichir_document
 from web.ressources import sources_web_reelles
 import streamlit.components.v1 as components
@@ -362,6 +375,12 @@ section.main:has(.thinking-stage) .st-key-composer_outils {
     width: 28px !important; height: 28px !important;
     font-size: 11px !important;
     flex-shrink: 0 !important;
+}
+/* Images jointes ou générées : taille réelle, pas le format avatar ci-dessus */
+[data-testid="stChatMessageContent"] [data-testid="stImage"] img {
+    width: auto !important; height: auto !important;
+    max-width: 100% !important; max-height: 320px !important;
+    border-radius: 10px !important; background: transparent !important;
 }
 [data-testid="stChatMessageContent"] {
     background: transparent !important;
@@ -931,6 +950,10 @@ components.html(
             if (!b.getAttribute('aria-label')) b.setAttribute('aria-label', n[1]);
           });
         });
+        doc.querySelectorAll('[data-testid="stFileChipDeleteBtn"] button[aria-label^="Remove "]').forEach(function (b) {
+          b.setAttribute('aria-label', 'Retirer ' + b.getAttribute('aria-label').slice(7));
+          b.title = b.getAttribute('aria-label');
+        });
       }, 1000);
 
       // Menu « + » du composer : exécuté dans la page parente (caméra/micro y sont autorisés)
@@ -992,9 +1015,9 @@ components.html(
         doc.head.appendChild(style);
 
         let menu = null;
-        let laisserPasser = false;
         const zone = function () { return doc.querySelector('[data-testid="stChatInputFileUploadButton"]'); };
         const boutonPlus = function () { const z = zone(); return z && z.querySelector('button'); };
+        const inputFichiers = function () { const z = zone(); return z && z.querySelector('input[type="file"]'); };
         const champTexte = function () { return doc.querySelector('[data-testid="stChatInputTextArea"]'); };
 
         function avertir(texte) {
@@ -1011,8 +1034,7 @@ components.html(
         }
 
         function joindre(fichiers) {
-          const z = zone();
-          const inp = z && z.querySelector('input[type="file"]');
+          const inp = inputFichiers();
           if (!inp || !fichiers.length) return;
           const dt = new DataTransfer();
           fichiers.forEach(function (f) { dt.items.add(f); });
@@ -1071,8 +1093,10 @@ components.html(
 
         function agir(action) {
           if (action === 'fichiers') {
-            const b = boutonPlus();
-            if (b) { laisserPasser = true; b.click(); }
+            // Appel synchrone dans le geste utilisateur, sinon le navigateur refuse le sélecteur natif
+            const inp = inputFichiers();
+            if (inp) { inp.value = ''; inp.click(); }
+            else avertir('Import de fichiers indisponible pour le moment.');
           } else if (action === 'photo') {
             if (tactile) photoMobile(); else photoWebcam();
           } else if (action === 'audio') {
@@ -1167,11 +1191,12 @@ components.html(
           }
         }
 
-        // Le clic (ou Entrée/Espace) sur « + » ouvre le menu au lieu du sélecteur de fichiers
+        // Le clic (ou Entrée/Espace) sur « + » ouvre le menu au lieu du sélecteur de fichiers.
+        // Les clics sur l'<input type="file"> lui-même doivent passer : un preventDefault() y annule le dialogue natif.
         doc.addEventListener('click', function (ev) {
           const z = zone();
           if (z && z.contains(ev.target)) {
-            if (laisserPasser) { laisserPasser = false; return; }
+            if (ev.target.matches && ev.target.matches('input[type="file"]')) return;
             ev.preventDefault();
             ev.stopPropagation();
             if (menu) fermer(true); else ouvrir();
@@ -1793,7 +1818,9 @@ def icone_fichier(nom: str) -> str:
     ext = Path(nom).suffix.lower()
     if ext == ".pdf":                          return "📄"
     if ext in {".docx", ".doc"}:               return "📘"
-    if ext in {".png",".jpg",".jpeg",".gif",".webp"}: return "🖼️"
+    if ext in {".xlsx",".xls",".csv",".tsv"}: return "📊"
+    if ext in {".pptx"}:                      return "📽️"
+    if ext in {".png",".jpg",".jpeg",".gif",".webp",".bmp"}: return "🖼️"
     if ext in {".wav",".mp3",".m4a",".ogg",".webm"}: return "🎤"
     if ext in {".py"}:                        return "🐍"
     if ext in {".js",".ts"}:                  return "🟨"
@@ -1804,6 +1831,34 @@ def icone_fichier(nom: str) -> str:
     if ext in {".md",".txt",".rst"}:          return "📝"
     if ext in {".json",".yaml",".yml",".toml"}: return "⚙️"
     return "📎"
+
+
+def _afficher_piece_jointe(f: dict) -> None:
+    """Pièce jointe dans la bulle utilisateur : aperçu, type, taille, avertissements."""
+    infos = [p for p in (f.get("resume"), taille_lisible(f["taille"]) if f.get("taille") else "") if p]
+    if f.get("type") == "image" and f.get("image_b64"):
+        try:
+            import base64 as _b64img
+
+            st.image(_b64img.b64decode(f["image_b64"]), caption=f.get("nom") or "image",
+                     use_container_width=True)
+        except Exception:
+            st.caption(f"🖼 {f.get('nom')}")
+    if f.get("image_omise"):
+        infos.append("image non conservée après rechargement")
+
+    def _neutre(t: str) -> str:
+        return re.sub(r"[\[\]`*_<>#|\\]", " ", str(t))
+
+    lignes = []
+    if not (f.get("type") == "image" and f.get("image_b64")):
+        nom = str(f.get("nom", "fichier")).replace("`", "'")
+        lignes.append(f"`{icone_fichier(nom)} {nom}`")
+    if infos:
+        lignes.append(f":gray[{_neutre(' · '.join(infos))}]")
+    lignes += [f":orange[⚠ {_neutre(a)}]" for a in f.get("avertissements") or []]
+    if lignes:
+        st.markdown("  \n".join(lignes))
 
 
 def _question_precedente(messages: list, idx: int) -> str:
@@ -2484,23 +2539,8 @@ with col:
             with droite:
                 fichiers_msg = msg.get("fichiers", [])
                 with st.chat_message("user", avatar="user"):
-                    if fichiers_msg:
-                        for f in fichiers_msg:
-                            if f.get("type") == "image" and f.get("image_b64"):
-                                try:
-                                    import base64 as _b64img
-
-                                    st.image(
-                                        _b64img.b64decode(f["image_b64"]),
-                                        caption=f.get("nom") or "image",
-                                        use_container_width=True,
-                                    )
-                                except Exception:
-                                    st.caption(f"🖼 {f.get('nom')}")
-                            else:
-                                st.markdown(
-                                    f"`{icone_fichier(f['nom'])} {f['nom']}`"
-                                )
+                    for f in fichiers_msg or []:
+                        _afficher_piece_jointe(f)
                     st.markdown(msg["content"])
                 _afficher_actions_message(msg_idx, msg.get("content", ""), "user")
         else:
@@ -2619,12 +2659,23 @@ with col:
 def _joindre_fichiers(fichiers_up) -> list:
     """Pièces jointes soumises → fichiers traités ; les refusés sont signalés, jamais joints."""
     joints = []
-    for f in fichiers_up or []:
-        t = traiter_fichier(f)
-        if t.get("erreur"):
-            notifier(f"{t['nom']} non joint : {t['erreur']}", "erreur")
-        elif all(j["nom"] != t["nom"] for j in joints):
-            joints.append(t)
+    fichiers_up = list(fichiers_up or [])
+    if len(fichiers_up) > FICHIERS_MAX_PAR_MESSAGE:
+        notifier(
+            f"{len(fichiers_up) - FICHIERS_MAX_PAR_MESSAGE} fichier(s) ignoré(s) : "
+            f"au plus {FICHIERS_MAX_PAR_MESSAGE} pièces jointes par message.",
+            "avertissement",
+        )
+        fichiers_up = fichiers_up[:FICHIERS_MAX_PAR_MESSAGE]
+    if not fichiers_up:
+        return joints
+    with st.spinner("Lecture des pièces jointes…"):
+        for f in fichiers_up:
+            t = traiter_fichier(f)
+            if t.get("erreur"):
+                notifier(f"« {t['nom']} » non joint : {t['erreur']}", "erreur")
+            elif all(j["nom"] != t["nom"] for j in joints):
+                joints.append(t)
     return joints
 
 
@@ -2677,7 +2728,8 @@ with col:
         else ("Connectez-vous pour continuer…" if bloque_invite else "Poser une question…"),
         key=f"composer_{st.session_state.input_key}",
         accept_file="multiple" if connecte else False,
-        file_type=sorted(e.lstrip(".") for e in UPLOAD_EXTENSIONS_OK) if connecte else None,
+        # Les formats refusés restent sélectionnables : traiter_fichier() explique le refus au lieu d'un rejet muet
+        file_type=sorted(e.lstrip(".") for e in UPLOAD_EXTENSIONS_OK | set(UPLOAD_FORMATS_REFUSES)) if connecte else None,
         max_upload_size=max(1, UPLOAD_MAX_BYTES // (1024 * 1024)) if connecte else None,
         accept_audio=connecte,
         disabled=composer_occupe,
@@ -2734,9 +2786,11 @@ if st.session_state.en_cours and st.session_state.messages:
     dernier_user = users[-1]
     q            = dernier_user["content"]
     fichiers_msg = dernier_user.get("fichiers", [])
+    a_un_fichier = bool(fichiers_msg)
+    # Question de suivi sans pièce jointe : les documents du message précédent restent en contexte
+    fichiers_contexte = fichiers_msg or fichiers_de_rappel(st.session_state.messages)
 
-    contexte_fichiers = formater_pour_prompt(fichiers_msg)
-    a_un_fichier      = bool(fichiers_msg)
+    contexte_fichiers = formater_pour_prompt(fichiers_msg, question=q, avec_regles=False)
 
     q_enrichie = q
     if contexte_fichiers:
@@ -2786,14 +2840,16 @@ if st.session_state.en_cours and st.session_state.messages:
         _label_spin = "Réflexion…"
         if demande_generation_image(q):
             _label_spin = "Génération de l'image…"
-        elif a_un_fichier and any(f.get("type") == "image" for f in fichiers_msg):
-            _label_spin = "Analyse de l'image…"
+        elif necessite_preparation(fichiers_contexte, q):
+            _label_spin = "Analyse des pièces jointes (images, pages numérisées, audio)…"
+        elif fichiers_contexte:
+            _label_spin = "Lecture des documents joints…"
 
         with st.spinner(_label_spin):
             resultat = st.session_state.orchestrateur.repondre(
                 question=q,
                 historique=st.session_state.historique_llm[:-1],
-                fichiers=fichiers_msg if a_un_fichier else None,
+                fichiers=fichiers_contexte or None,
                 filtres=filtres if (utiliser_corpus or not a_un_fichier) else None,
                 top_k=st.session_state.top_k,
                 stream=True,

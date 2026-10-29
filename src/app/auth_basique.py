@@ -455,20 +455,23 @@ def _contenu_modal_auth(
 
     st.markdown('<div class="auth-ou-wrap">ou</div>', unsafe_allow_html=True)
 
+    # Formulaires : Entrée dans le champ valide l'étape (sans souris)
     etape = st.session_state.get("auth_email_step", "email")
     if etape == "email":
-        email = st.text_input(
-            "Email",
-            placeholder="Email address",
-            label_visibility="collapsed",
-            key=f"{key_prefix}_email",
-        )
-        if st.button(
-            "Continuer",
-            type="primary",
-            use_container_width=True,
-            key=f"{key_prefix}_email_go",
-        ):
+        with st.form(f"{key_prefix}_form_email", border=False):
+            email = st.text_input(
+                "Email",
+                placeholder="Email address",
+                label_visibility="collapsed",
+                key=f"{key_prefix}_email",
+            )
+            continuer = st.form_submit_button(
+                "Continuer",
+                type="primary",
+                use_container_width=True,
+                key=f"{key_prefix}_email_go",
+            )
+        if continuer:
             email = (email or "").strip().lower()
             if "@" not in email:
                 afficher_erreur("Entrez une adresse e-mail valide.")
@@ -486,41 +489,47 @@ def _contenu_modal_auth(
             st.session_state.auth_email_step = "email"
             st.rerun()
 
-        password = st.text_input(
-            "Mot de passe",
-            type="password",
-            placeholder="Mot de passe (min. 6 caractères)",
-            label_visibility="collapsed",
-            key=f"{key_prefix}_pwd",
-        )
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("Se connecter", use_container_width=True, key=f"{key_prefix}_login"):
-                user, msg = _users_db().connecter_email(email, password)
-                if user:
-                    _appliquer_user(user)
-                    notifier(
-                        "Connecté en administrateur."
-                        if user.get("tier") == "admin"
-                        else "Vous êtes connecté."
-                    )
-                    st.rerun()
-                else:
-                    afficher_erreur(msg)
-        with c2:
-            if st.button(
-                "Créer un compte",
-                type="primary",
-                use_container_width=True,
-                key=f"{key_prefix}_reg",
-            ):
-                user, msg = _users_db().inscrire_email(email, password)
-                if user:
-                    _appliquer_user(user)
-                    notifier("Compte créé. Bienvenue !")
-                    st.rerun()
-                else:
-                    afficher_erreur(msg)
+        # Entrée déclenche le premier bouton du formulaire : « Se connecter »
+        with st.form(f"{key_prefix}_form_pwd", border=False):
+            password = st.text_input(
+                "Mot de passe",
+                type="password",
+                placeholder="Mot de passe (min. 6 caractères)",
+                label_visibility="collapsed",
+                key=f"{key_prefix}_pwd",
+            )
+            c1, c2 = st.columns(2)
+            with c1:
+                connexion = st.form_submit_button(
+                    "Se connecter", use_container_width=True, key=f"{key_prefix}_login"
+                )
+            with c2:
+                inscription = st.form_submit_button(
+                    "Créer un compte",
+                    type="primary",
+                    use_container_width=True,
+                    key=f"{key_prefix}_reg",
+                )
+        if connexion:
+            user, msg = _users_db().connecter_email(email, password)
+            if user:
+                _appliquer_user(user)
+                notifier(
+                    "Connecté en administrateur."
+                    if user.get("tier") == "admin"
+                    else "Vous êtes connecté."
+                )
+                st.rerun()
+            else:
+                afficher_erreur(msg)
+        elif inscription:
+            user, msg = _users_db().inscrire_email(email, password)
+            if user:
+                _appliquer_user(user)
+                notifier("Compte créé. Bienvenue !")
+                st.rerun()
+            else:
+                afficher_erreur(msg)
 
 
 @st.dialog("Connectez-vous ou inscrivez-vous")

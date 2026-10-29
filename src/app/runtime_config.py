@@ -25,7 +25,7 @@ _FALLBACKS: Dict[str, Any] = {
     "LLM_PRESENCE_PENALTY": 0.0,
     "LLM_FREQUENCY_PENALTY": 0.2,
     "MAX_TOKENS": 3000,
-    "GROQ_VISION_MODEL": "groq/compound",
+    "GROQ_VISION_MODEL": "qwen/qwen3.8-27b",
     "QUOTA_GUEST_REQ": 12,
     "QUOTA_EMAIL_REQ": 80,
     "QUOTA_GITHUB_REQ": 200,
@@ -83,7 +83,7 @@ def charger() -> Dict[str, Any]:
                 if "llama-3.3-70b" in modele or "llama-3.1-8b-instant" in modele:
                     saved = {**saved, "LLM_MODEL": data["LLM_MODEL"]}
                 vision = str(saved.get("GROQ_VISION_MODEL") or "")
-                if "llama-4-scout" in vision:
+                if any(x in vision for x in ("llama-4-scout", "groq/compound", "qwen3.6-27b")):
                     saved = {**saved, "GROQ_VISION_MODEL": data["GROQ_VISION_MODEL"]}
                 data.update(saved)
         except (OSError, json.JSONDecodeError):

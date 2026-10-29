@@ -433,23 +433,11 @@ def _alleger_meta_messages(meta: Dict[str, Any]) -> Dict[str, Any]:
             if isinstance(i, dict)
         ]
     if out.get("fichiers"):
-        legers = []
-        for f in out["fichiers"] or []:
-            if not isinstance(f, dict):
-                continue
-            f2 = {
-                k: v
-                for k, v in f.items()
-                if k not in ("image_b64", "audio_bytes", "bytes")
-            }
-            if f.get("type") == "image":
-                f2["image_omise"] = True
-            # Tronquer contenu vision très long en base
-            contenu = f2.get("contenu")
-            if isinstance(contenu, str) and len(contenu) > 4000:
-                f2["contenu"] = contenu[:4000] + "…"
-            legers.append(f2)
-        out["fichiers"] = legers
+        from app.gestionnaire_fichiers import fichiers_pour_persistance
+
+        out["fichiers"] = [
+            fichiers_pour_persistance(f) for f in out["fichiers"] or [] if isinstance(f, dict)
+        ]
     return out
 
 

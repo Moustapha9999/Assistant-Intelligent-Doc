@@ -60,7 +60,8 @@ def test_formater_image_placeholder():
         }
     ]
     txt = formater_pour_prompt(fichiers)
-    assert "analyse visuelle en attente" in txt
+    assert "NON analysé" in txt
+    assert "[Image : shot.png]" in txt
 
 
 def test_stats_corpus_ne_plante_pas():

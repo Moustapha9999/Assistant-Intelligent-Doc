@@ -60,12 +60,35 @@ DATE_COLLECTE_GITHUB = os.getenv("DATE_COLLECTE_GITHUB", "2026-06-11")
 # --- Upload / sécurité --------------------------------------------------------
 UPLOAD_MAX_BYTES = int(os.getenv("UPLOAD_MAX_BYTES", str(10 * 1024 * 1024)))  # 10 Mo
 UPLOAD_EXTENSIONS_OK = {
-    ".pdf", ".docx", ".doc", ".md", ".txt", ".rst",
+    ".pdf", ".docx", ".md", ".txt", ".rst",
+    ".xlsx", ".xls", ".csv", ".tsv", ".pptx",
     ".py", ".js", ".ts", ".java", ".go", ".rs", ".c", ".cpp", ".h",
-    ".json", ".yaml", ".yml", ".toml", ".sql", ".sh",
-    ".png", ".jpg", ".jpeg", ".gif", ".webp",
+    ".json", ".yaml", ".yml", ".toml", ".sql", ".sh", ".xml", ".html", ".htm",
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp",
     ".wav", ".mp3", ".m4a", ".ogg", ".webm",
 }
+# Formats reconnus mais refusés faute de conversion fiable (aucun LibreOffice côté serveur)
+UPLOAD_FORMATS_REFUSES = {
+    ".doc": "Word 97-2003 (.doc) n'est pas pris en charge : enregistrez le document en .docx.",
+    ".ppt": "PowerPoint 97-2003 (.ppt) n'est pas pris en charge : enregistrez la présentation en .pptx.",
+    ".xlsm": "Les classeurs avec macros (.xlsm) sont refusés : enregistrez-le en .xlsx (sans macros).",
+    ".docm": "Les documents avec macros (.docm) sont refusés : enregistrez-le en .docx.",
+    ".svg": "Les images SVG ne sont pas prises en charge : exportez-la en PNG.",
+}
+FICHIERS_MAX_PAR_MESSAGE = int(os.getenv("FICHIERS_MAX_PAR_MESSAGE", "8"))
+FICHIERS_MAX_IMAGES_VISION = int(os.getenv("FICHIERS_MAX_IMAGES_VISION", "5"))
+# Budget de caractères du contexte « fichiers » injecté dans le prompt (limite TPM Groq)
+FICHIERS_MAX_CHARS_PROMPT = int(os.getenv("FICHIERS_MAX_CHARS_PROMPT", "12000"))
+# Texte extrait conservé en base par fichier (questions de suivi après rechargement)
+FICHIERS_PERSIST_MAX_CHARS = int(os.getenv("FICHIERS_PERSIST_MAX_CHARS", "60000"))
+FICHIERS_TIMEOUT_EXTRACTION_S = float(os.getenv("FICHIERS_TIMEOUT_EXTRACTION_S", "60"))
+PDF_MAX_PAGES = int(os.getenv("PDF_MAX_PAGES", "300"))
+PDF_OCR_MAX_PAGES = int(os.getenv("PDF_OCR_MAX_PAGES", "5"))
+PDF_FIGURES_MAX_PAGES = int(os.getenv("PDF_FIGURES_MAX_PAGES", "3"))
+TABLEUR_MAX_LIGNES = int(os.getenv("TABLEUR_MAX_LIGNES", "5000"))
+ARCHIVE_MAX_DECOMPRESSE = int(os.getenv("ARCHIVE_MAX_DECOMPRESSE", str(200 * 1024 * 1024)))
+ARCHIVE_MAX_MEMBRES = int(os.getenv("ARCHIVE_MAX_MEMBRES", "5000"))
+IMAGE_MAX_PIXELS = int(os.getenv("IMAGE_MAX_PIXELS", str(40_000_000)))
 
 
 @lru_cache(maxsize=1)

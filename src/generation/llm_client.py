@@ -28,6 +28,51 @@ def _attendre_rate_limit(message: str, tentative: int) -> float:
     return min(attente, 120)
 
 
+MODELE_VISION_DEFAUT = "qwen/qwen3.8-27b"
+# Essayés dans l'ordre si le modèle configuré est retiré ou n'accepte pas les images
+MODELES_VISION_REPLI = ("qwen/qwen3.8-27b",)
+
+
+def _erreur_vision_utilisateur(exc: Exception) -> Optional[str]:
+    """None si l'erreur justifie d'essayer un autre modèle ; sinon message utilisateur."""
+    msg = str(exc).lower()
+    if (
+        "does not exist" in msg or "model_not_found" in msg or "decommissioned" in msg
+        or "must be a string" in msg or "does not support" in msg or "404" in msg
+    ):
+        return None
+    if "429" in msg or "rate_limit" in msg:
+        return "le service de vision est momentanément saturé ; réessayez dans une minute."
+    if "timeout" in msg or "timed out" in msg:
+        return "l'analyse a dépassé le délai autorisé ; réessayez avec une image plus légère."
+    if "413" in msg or "too large" in msg:
+        return "l'image est trop volumineuse pour le service de vision."
+    return "le service d'analyse d'images est indisponible pour le moment."
+
+
+def _erreur_llm_utilisateur(exc: object) -> str:
+    """Message affichable (préfixe « ❌ Erreur » attendu par l'orchestrateur), sans détail brut."""
+    nom = type(exc).__name__.lower()
+    msg = str(exc).lower()
+    if "connection" in nom or "connection error" in msg or "getaddrinfo" in msg:
+        cause = "le service d'IA est injoignable (connexion réseau). Réessayez dans un instant."
+    elif "timeout" in nom or "timed out" in msg:
+        cause = "le service d'IA a mis trop de temps à répondre. Réessayez dans un instant."
+    elif "401" in msg or "authentication" in nom or "invalid api key" in msg:
+        cause = "la clé d'accès au service d'IA est refusée. Contactez l'administrateur."
+    elif "429" in msg or "rate_limit" in msg:
+        cause = "la limite de requêtes du service d'IA est atteinte. Réessayez dans une minute."
+    elif "413" in msg or "too large" in msg:
+        cause = "la demande est trop volumineuse. Réduisez les pièces jointes ou la question."
+    else:
+        cause = "le service d'IA n'a pas pu traiter la demande. Réessayez dans un instant."
+    return f"❌ Erreur : {cause}"
+
+
+def _sans_reflexion(texte: str) -> str:
+    return re.sub(r"<think>.*?</think>", "", texte or "", flags=re.S).strip()
+
+
 def tronquer_messages(messages: List[Dict], facteur: float = 0.6) -> List[Dict]:
     """Réduit le dernier message user (contexte) en cas de requête trop grosse."""
     out = [dict(m) for m in messages]
@@ -103,10 +148,8 @@ class LLMClient:
         if self.modele_leger:
             self.max_tokens = min(self.max_tokens, int(os.getenv("MAX_TOKENS_LEGER", "1200")))
 
-        self.modele_vision = _rt_get(
-            "GROQ_VISION_MODEL",
-            "groq/compound",
-        )
+        self.modele_vision = _rt_get("GROQ_VISION_MODEL", MODELE_VISION_DEFAUT)
+        self.derniere_erreur_vision: Optional[str] = None
 
         if os.getenv("MODE_RAGAS_EVAL", "false").lower() == "true":
             self.appliquer_mode_ragas()
@@ -160,9 +203,9 @@ class LLMClient:
                     )
                     time.sleep(attente)
                     continue
-                print(f"   ❌ {exc}")
-                return f"❌ Erreur : {exc}", 0
-        return f"❌ Erreur : {derniere_erreur}", 0
+                print(f"   ❌ LLM : {type(exc).__name__}")
+                return _erreur_llm_utilisateur(exc), 0
+        return _erreur_llm_utilisateur(derniere_erreur), 0
 
     def analyser_image(
         self,
@@ -171,7 +214,12 @@ class LLMClient:
         question: str = "Décris cette image en détail (texte visible, UI, schéma, code).",
         max_tokens: int = 1200,
     ) -> Tuple[str, int]:
-        """Analyse visuelle réelle via modèle multimodal Groq (base64)."""
+        """Analyse visuelle réelle via modèle multimodal Groq (base64).
+
+        Retourne ("", 0) en cas d'échec ; `self.derniere_erreur_vision` explique la cause
+        en termes compréhensibles (jamais de trace ni de clé).
+        """
+        self.derniere_erreur_vision = None
         if not image_b64:
             return "", 0
         data_url = f"data:{media_type or 'image/png'};base64,{image_b64}"
@@ -193,33 +241,48 @@ class LLMClient:
                 ],
             }
         ]
-        try:
-            completion = self.client.chat.completions.create(
-                model=self.modele_vision,
-                messages=messages,
-                temperature=0.2,
-                max_tokens=max_tokens,
-            )
-            contenu = completion.choices[0].message.content or ""
-            tokens = int(getattr(completion.usage, "total_tokens", 0) or 0)
-            return contenu.strip(), tokens
-        except Exception as exc:
-            # Fallback modèle alternatif connu
-            alt = "qwen/qwen3.6-27b"
-            if self.modele_vision != alt:
+        candidats = list(dict.fromkeys([self.modele_vision, *MODELES_VISION_REPLI]))
+        client = self.client.with_options(timeout=90.0, max_retries=1)
+        for modele in candidats:
+            completion = None
+            for tentative in range(3):
                 try:
-                    completion = self.client.chat.completions.create(
-                        model=alt,
+                    completion = client.chat.completions.create(
+                        model=modele,
                         messages=messages,
                         temperature=0.2,
                         max_tokens=max_tokens,
                     )
-                    contenu = completion.choices[0].message.content or ""
-                    tokens = int(getattr(completion.usage, "total_tokens", 0) or 0)
-                    return contenu.strip(), tokens
-                except Exception as exc2:
-                    return f"[Vision indisponible : {exc2}]", 0
-            return f"[Vision indisponible : {exc}]", 0
+                    break
+                except Exception as exc:
+                    raison = _erreur_vision_utilisateur(exc)
+                    print(f"   ⚠️  Vision ({modele}) : {type(exc).__name__}")
+                    low = str(exc).lower()
+                    if ("429" in low or "rate_limit" in low) and tentative < 2:
+                        attente = _attendre_rate_limit(str(exc), tentative)
+                        if attente <= 45:
+                            time.sleep(attente)
+                            continue
+                    if raison is None:
+                        break
+                    self.derniere_erreur_vision = raison
+                    return "", 0
+            if completion is None:
+                continue
+            contenu = _sans_reflexion(completion.choices[0].message.content or "")
+            if not contenu:
+                self.derniere_erreur_vision = "le modèle de vision n'a renvoyé aucune description."
+                return "", 0
+            if modele != self.modele_vision:
+                print(f"   ℹ️  Modèle de vision {self.modele_vision} indisponible → {modele}")
+                self.modele_vision = modele
+            tokens = int(getattr(completion.usage, "total_tokens", 0) or 0)
+            return contenu, tokens
+        self.derniere_erreur_vision = (
+            "aucun modèle de vision n'est accessible avec ce compte Groq "
+            "(vérifiez GROQ_VISION_MODEL)."
+        )
+        return "", 0
 
     def stream(
         self,
@@ -286,7 +349,8 @@ class LLMClient:
                     )
                     time.sleep(attente)
                     continue
-                yield f"❌ Erreur : {exc}"
+                print(f"   ❌ LLM (stream) : {type(exc).__name__}")
+                yield _erreur_llm_utilisateur(exc)
                 return
 
-        yield f"❌ Erreur : {derniere_erreur}"
+        yield _erreur_llm_utilisateur(derniere_erreur)
