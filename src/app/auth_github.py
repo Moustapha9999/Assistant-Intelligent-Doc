@@ -9,6 +9,8 @@ from urllib.parse import urlencode
 
 import httpx
 
+from app.auth_oauth import detail_erreur_jeton, normaliser_redirect_uri
+
 
 def github_oauth_configure() -> bool:
     return bool(
@@ -17,35 +19,44 @@ def github_oauth_configure() -> bool:
     )
 
 
-def url_autorisation(redirect_uri: str, state: str) -> str:
+def url_autorisation(redirect_uri: str, state: str, code_challenge: str = "") -> str:
     params = {
         "client_id": os.getenv("GITHUB_OAUTH_CLIENT_ID", "").strip(),
-        "redirect_uri": redirect_uri,
+        "redirect_uri": normaliser_redirect_uri(redirect_uri),
         "scope": "read:user user:email",
         "state": state,
     }
+    if code_challenge:
+        params["code_challenge"] = code_challenge
+        params["code_challenge_method"] = "S256"
     return "https://github.com/login/oauth/authorize?" + urlencode(params)
 
 
-def echanger_code(code: str, redirect_uri: str) -> Tuple[Optional[Dict[str, Any]], str]:
+def echanger_code(
+    code: str, redirect_uri: str, code_verifier: str = ""
+) -> Tuple[Optional[Dict[str, Any]], str]:
     """Échange le code OAuth contre le profil GitHub."""
     client_id = os.getenv("GITHUB_OAUTH_CLIENT_ID", "").strip()
     client_secret = os.getenv("GITHUB_OAUTH_CLIENT_SECRET", "").strip()
     if not client_id or not client_secret:
         return None, "GitHub OAuth non configuré."
     try:
+        corps = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "code": code,
+            "redirect_uri": normaliser_redirect_uri(redirect_uri),
+        }
+        if code_verifier:
+            corps["code_verifier"] = code_verifier
         with httpx.Client(timeout=20.0) as client:
             token_r = client.post(
                 "https://github.com/login/oauth/access_token",
                 headers={"Accept": "application/json"},
-                data={
-                    "client_id": client_id,
-                    "client_secret": client_secret,
-                    "code": code,
-                    "redirect_uri": redirect_uri,
-                },
+                data=corps,
             )
-            token_r.raise_for_status()
+            if token_r.status_code >= 400:
+                return None, f"Token GitHub refusé : {detail_erreur_jeton(token_r)}"
             token_data = token_r.json()
             access = token_data.get("access_token")
             if not access:
@@ -58,7 +69,8 @@ def echanger_code(code: str, redirect_uri: str) -> Tuple[Optional[Dict[str, Any]
                     "Accept": "application/vnd.github+json",
                 },
             )
-            user_r.raise_for_status()
+            if user_r.status_code >= 400:
+                return None, f"Profil GitHub refusé : {detail_erreur_jeton(user_r)}"
             profile = user_r.json()
 
             email = profile.get("email")
@@ -82,7 +94,7 @@ def echanger_code(code: str, redirect_uri: str) -> Tuple[Optional[Dict[str, Any]
                 "name": profile.get("name") or profile.get("login") or "",
             }, "ok"
     except Exception as exc:
-        return None, f"Erreur OAuth GitHub : {exc}"
+        return None, f"Erreur OAuth GitHub : {type(exc).__name__}"
 
 
 def nouveau_state() -> str:

@@ -207,7 +207,8 @@ class UtilisateursSQLite:
                     etat_hash TEXT PRIMARY KEY,
                     fournisseur TEXT NOT NULL,
                     session_hash TEXT,
-                    expire_le TEXT NOT NULL
+                    expire_le TEXT NOT NULL,
+                    pkce_verifier TEXT
                 );
                 CREATE TABLE IF NOT EXISTS auth_tentatives (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -231,6 +232,9 @@ class UtilisateursSQLite:
                 conn.execute(
                     f"CREATE INDEX IF NOT EXISTS idx_users_{col} ON users({col})"
                 )
+            cols_oauth = colonnes(conn, "oauth_etats")
+            if "pkce_verifier" not in cols_oauth:
+                conn.execute("ALTER TABLE oauth_etats ADD COLUMN pkce_verifier TEXT")
             cols_audit = colonnes(conn, "admin_audit")
             if "categorie" not in cols_audit:
                 conn.execute(
@@ -754,18 +758,26 @@ class UtilisateursSQLite:
 
     # ── États OAuth (anti-CSRF, usage unique, liés à la session) ─────────────
 
-    def enregistrer_etat_oauth(self, etat: str, fournisseur: str, jeton_session: Optional[str]) -> None:
+    def enregistrer_etat_oauth(
+        self,
+        etat: str,
+        fournisseur: str,
+        jeton_session: Optional[str],
+        pkce_verifier: str = "",
+    ) -> None:
         now = _maintenant()
         with ecriture(self.chemin) as conn:
             conn.execute("DELETE FROM oauth_etats WHERE expire_le < ?", (now.isoformat(),))
             conn.execute(
-                "INSERT OR REPLACE INTO oauth_etats (etat_hash, fournisseur, session_hash, expire_le) "
-                "VALUES (?, ?, ?, ?)",
+                "INSERT OR REPLACE INTO oauth_etats "
+                "(etat_hash, fournisseur, session_hash, expire_le, pkce_verifier) "
+                "VALUES (?, ?, ?, ?, ?)",
                 (
                     empreinte_jeton(etat),
                     fournisseur,
                     empreinte_jeton(jeton_session) if jeton_session else None,
                     (now + DUREE_ETAT_OAUTH).isoformat(),
+                    pkce_verifier or None,
                 ),
             )
 
@@ -775,14 +787,19 @@ class UtilisateursSQLite:
         fournisseur: str,
         jeton_session: Optional[str],
         exiger_meme_session: bool = True,
+        pkce_out: Optional[List[str]] = None,
     ) -> bool:
         """True si l'état a été émis par cette application pour ce fournisseur, n'est pas
-        expiré, n'a jamais servi et (par défaut) appartient à la même session navigateur."""
+        expiré, n'a jamais servi et (par défaut) appartient à la même session navigateur.
+
+        `pkce_out` reçoit le code_verifier si l'état est accepté (chaîne vide si absent).
+        """
         if not etat:
             return False
         with ecriture(self.chemin) as conn:
             row = conn.execute(
-                "SELECT fournisseur, session_hash, expire_le FROM oauth_etats WHERE etat_hash = ?",
+                "SELECT fournisseur, session_hash, expire_le, pkce_verifier "
+                "FROM oauth_etats WHERE etat_hash = ?",
                 (empreinte_jeton(etat),),
             ).fetchone()
             conn.execute("DELETE FROM oauth_etats WHERE etat_hash = ?", (empreinte_jeton(etat),))
@@ -794,7 +811,10 @@ class UtilisateursSQLite:
             attendu = row["session_hash"]
             if not attendu or not jeton_session:
                 return False
-            return hmac.compare_digest(attendu, empreinte_jeton(jeton_session))
+            if not hmac.compare_digest(attendu, empreinte_jeton(jeton_session)):
+                return False
+        if pkce_out is not None:
+            pkce_out.append(row["pkce_verifier"] or "")
         return True
 
     def _touch(self, user_id: str) -> None:

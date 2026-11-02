@@ -45,7 +45,7 @@ est_admin_session = _auth_basique.est_admin_session
 # Identité validée côté serveur (session ou cookie, sinon invité unique) avant les menus,
 # puis retour OAuth éventuel (rotation de session vers le compte).
 _auth_basique.exiger_auth()
-_identite.synchroniser_cookie()
+_auth_basique.prendre_en_compte_fenetre_oauth(_identite.synchroniser_cookie())
 
 _pages = [
     st.Page(

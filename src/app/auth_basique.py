@@ -38,6 +38,12 @@ from app.auth_google import (
     nouveau_state as nouveau_state_google,
     url_autorisation as url_autorisation_google,
 )
+from app.auth_oauth import (
+    fournisseur_depuis_etat,
+    message_annulation,
+    normaliser_redirect_uri,
+    pkce_paire,
+)
 from app import identite as _identite
 from app.quotas import quota_pour
 from app.ui_composants import afficher_erreur, journal, notifier
@@ -227,15 +233,19 @@ def _oauth_lier_session() -> bool:
     return os.getenv("OAUTH_STATE_LIER_SESSION", "1").strip().lower() not in {"0", "false", "non", "no"}
 
 
-def _etat_oauth_valide(state: str, fournisseur: str) -> bool:
+def _etat_oauth_valide(state: str, fournisseur: str, pkce_out: Optional[list] = None) -> bool:
     return _users_db().consommer_etat_oauth(
-        state, fournisseur, _identite.jeton_session_courant(), exiger_meme_session=_oauth_lier_session()
+        state,
+        fournisseur,
+        _identite.jeton_session_courant(),
+        exiger_meme_session=_oauth_lier_session(),
+        pkce_out=pkce_out,
     )
 
 
 def _redirect_oauth(fournisseur: str = "") -> str:
     propre = os.getenv(f"{fournisseur.upper()}_OAUTH_REDIRECT_URI", "").strip() if fournisseur else ""
-    return (
+    return normaliser_redirect_uri(
         propre
         or os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "").strip()
         or os.getenv("GITHUB_OAUTH_REDIRECT_URI", "").strip()
@@ -243,10 +253,11 @@ def _redirect_oauth(fournisseur: str = "") -> str:
     )
 
 
-def _echec_oauth(fournisseur: str, detail: str) -> None:
+def _echec_oauth(fournisseur: str, detail: str, *, signal: str = "erreur") -> None:
     journal.warning("Échec OAuth %s : %s", fournisseur, detail)
     _users_db().evenement_securite("oauth_echec", "faible", f"{fournisseur} : {detail}"[:300])
     afficher_erreur(f"La connexion avec {fournisseur} a échoué.", conseil="Recommencez la connexion.")
+    _identite.signaler_oauth(signal)
 
 
 def _connexion_oauth(user: Dict[str, Any], fournisseur: str) -> None:
@@ -255,17 +266,41 @@ def _connexion_oauth(user: Dict[str, Any], fournisseur: str) -> None:
     )
     if _appliquer_user(user):
         notifier(f"Connecté avec {fournisseur}.")
+        _identite.signaler_oauth("ok")
+        fermer_connexion()
+        return
     st.rerun()
 
 
+_PARAMS_OAUTH = (
+    "code", "state", "apple_name", "error", "error_description",
+    "scope", "iss", "authuser", "prompt", "hd", "session_state",
+)
+
+
+def _qp_texte(valeur: Any) -> str:
+    if isinstance(valeur, list):
+        valeur = valeur[0] if valeur else ""
+    return str(valeur or "")
+
+
+def _nettoyer_params_oauth() -> None:
+    for k in _PARAMS_OAUTH:
+        try:
+            del st.query_params[k]
+        except Exception:
+            pass
+
+
 def _traiter_callback_oauth() -> None:
-    """Traite le retour OAuth Google ou GitHub (?code=&state=)."""
+    """Traite le retour OAuth Google ou GitHub (?code=&state= ou ?error=)."""
     try:
         qp = st.query_params
     except Exception:
         return
     code = qp.get("code")
     state = qp.get("state")
+    erreur = qp.get("error")
     apple_name = qp.get("apple_name") or ""
     apple_err = qp.get("apple_error")
     if apple_err:
@@ -274,34 +309,37 @@ def _traiter_callback_oauth() -> None:
         except Exception:
             pass
         afficher_erreur("Connexion Apple interrompue.", conseil="Recommencez la connexion.")
+        _identite.signaler_oauth("erreur")
         return
-    if not code:
+    if not code and not erreur:
         return
-    # Retour OAuth dans un nouvel onglet : tant que le cookie de session n'est pas lu, l'identité
-    # est provisoire et l'état (lié à la session) serait rejeté puis consommé à tort.
+
+    code = _qp_texte(code)
+    state_s = _qp_texte(state)
+    erreur = _qp_texte(erreur)
+    apple_name = _qp_texte(apple_name)
+    provider = st.session_state.get("oauth_provider") or fournisseur_depuis_etat(state_s)
+    libelle = {"google": "Google", "github": "GitHub", "apple": "Apple"}.get(provider, "OAuth")
+
+    if erreur:
+        _nettoyer_params_oauth()
+        if message_annulation(erreur):
+            afficher_erreur("Connexion annulée.", conseil="Vous pouvez réessayer quand vous voulez.")
+            _identite.signaler_oauth("annule")
+        else:
+            _echec_oauth(libelle, erreur)
+        return
+
+    # Retour OAuth dans une fenêtre secondaire : tant que le cookie de session n'est pas lu,
+    # l'identité est provisoire et l'état (lié à la session) serait rejeté puis consommé à tort.
     if st.session_state.get("_jeton_provisoire"):
         return
-    if isinstance(code, list):
-        code = code[0]
-    if isinstance(state, list):
-        state = state[0]
-    if isinstance(apple_name, list):
-        apple_name = apple_name[0]
-    state_s = str(state or "")
-    provider = st.session_state.get("oauth_provider") or ""
-    if state_s.startswith("ggl."):
-        provider = "google"
-    elif state_s.startswith("gh."):
-        provider = "github"
-    elif state_s.startswith("apl."):
-        provider = "apple"
 
-    for k in ("code", "state", "apple_name"):
-        try:
-            del st.query_params[k]
-        except Exception:
-            pass
+    _nettoyer_params_oauth()
+    if not code:
+        return
 
+    pkce: list = []
     if provider == "apple":
         if not apple_oauth_configure():
             return
@@ -325,10 +363,12 @@ def _traiter_callback_oauth() -> None:
     if provider == "google":
         if not google_oauth_configure():
             return
-        if not _etat_oauth_valide(state_s, "google"):
+        if not _etat_oauth_valide(state_s, "google", pkce):
             _echec_oauth("Google", "état invalide ou expiré")
             return
-        profile, err = echanger_code_google(str(code), _redirect_oauth("google"))
+        profile, err = echanger_code_google(
+            str(code), _redirect_oauth("google"), pkce[0] if pkce else ""
+        )
         st.session_state.pop("google_auth_url", None)
         st.session_state.pop("oauth_provider", None)
         if not profile:
@@ -345,10 +385,12 @@ def _traiter_callback_oauth() -> None:
     if provider == "github":
         if not github_oauth_configure():
             return
-        if not _etat_oauth_valide(state_s, "github"):
+        if not _etat_oauth_valide(state_s, "github", pkce):
             _echec_oauth("GitHub", "état invalide ou expiré")
             return
-        profile, err = echanger_code_github(str(code), _redirect_oauth("github"))
+        profile, err = echanger_code_github(
+            str(code), _redirect_oauth("github"), pkce[0] if pkce else ""
+        )
         st.session_state.pop("github_auth_url", None)
         st.session_state.pop("oauth_provider", None)
         if not profile:
@@ -367,14 +409,19 @@ def exiger_auth() -> bool:
     _identite.identite_courante()
     _traiter_callback_oauth()
     assurer_session_invite()
+    if est_compte_connecte():
+        fermer_connexion()
     return True
 
 
-def _nouvel_etat(fournisseur: str, generer) -> str:
+def _nouvel_etat(fournisseur: str, generer) -> tuple[str, str]:
     state = generer()
-    _users_db().enregistrer_etat_oauth(state, fournisseur, _identite.jeton_session_courant())
+    verifieur, challenge = pkce_paire()
+    _users_db().enregistrer_etat_oauth(
+        state, fournisseur, _identite.jeton_session_courant(), pkce_verifier=verifieur
+    )
     st.session_state.oauth_provider = fournisseur
-    return state
+    return state, challenge
 
 
 DUREE_URL_OAUTH_S = 300  # renouvelée bien avant l'expiration de l'état (10 min)
@@ -392,15 +439,28 @@ def _url_oauth(fournisseur: str) -> str:
     ):
         return cache["url"]
     if fournisseur == "google":
-        url = url_autorisation_google(_redirect_oauth("google"), _nouvel_etat("google", nouveau_state_google))
+        state, challenge = _nouvel_etat("google", nouveau_state_google)
+        url = url_autorisation_google(_redirect_oauth("google"), state, challenge)
     else:
-        url = url_autorisation_github(_redirect_oauth("github"), _nouvel_etat("github", nouveau_state_github))
+        state, challenge = _nouvel_etat("github", nouveau_state_github)
+        url = url_autorisation_github(_redirect_oauth("github"), state, challenge)
     st.session_state[cle] = {"url": url, "jeton": jeton, "t": time.time()}
     return url
 
 
+def _lancer_oauth(fournisseur: str, label: str, key: str) -> None:
+    """Lien vers le fournisseur ; le composant session transforme le clic en `window.open`."""
+    st.link_button(
+        label,
+        _url_oauth(fournisseur),
+        use_container_width=True,
+        key=key,
+        icon=":material/language:" if fournisseur == "google" else ":material/code:",
+    )
+
+
 def _lancer_apple() -> None:
-    state = _nouvel_etat("apple", nouveau_state_apple)
+    state, _challenge = _nouvel_etat("apple", nouveau_state_apple)
     st.session_state["apple_auth_url"] = url_autorisation_apple(state)
 
 
@@ -481,13 +541,7 @@ def _contenu_modal_auth(
 
     # Social — Google puis GitHub (Apple retiré : trop complexe sans compte Developer)
     if google_oauth_configure():
-        st.link_button(
-            "Continuer avec Google",
-            _url_oauth("google"),
-            use_container_width=True,
-            key=f"{key_prefix}_google",
-            icon=":material/language:",
-        )
+        _lancer_oauth("google", "Continuer avec Google", f"{key_prefix}_google")
     else:
         st.button(
             "Continuer avec Google",
@@ -500,13 +554,7 @@ def _contenu_modal_auth(
         st.caption("Google OAuth : ajoutez CLIENT_ID / SECRET dans `.env`.")
 
     if github_oauth_configure():
-        st.link_button(
-            "Continuer avec GitHub",
-            _url_oauth("github"),
-            use_container_width=True,
-            key=f"{key_prefix}_github",
-            icon=":material/code:",
-        )
+        _lancer_oauth("github", "Continuer avec GitHub", f"{key_prefix}_github")
     else:
         st.button(
             "Continuer avec GitHub",
@@ -678,6 +726,23 @@ def barre_auth_top() -> None:
         if st.button("Inscription", key="top_signup", type="primary", use_container_width=True):
             ouvrir_connexion()
             st.rerun()
+
+
+def prendre_en_compte_fenetre_oauth(resultat: Any = None) -> None:
+    """Après un signal de la fenêtre secondaire : relit l'état serveur, jamais le message JS."""
+    maj = getattr(resultat, "oauth_maj", None)
+    ui = getattr(resultat, "oauth_ui", None)
+    if ui == "popup_bloque" and not est_compte_connecte():
+        afficher_erreur(
+            "Le navigateur a bloqué la fenêtre de connexion.",
+            conseil="Autorisez les fenêtres contextuelles pour ce site, puis réessayez.",
+        )
+    if maj == "ok" and est_compte_connecte():
+        fermer_connexion()
+    elif maj == "annule" and not est_compte_connecte():
+        notifier("Connexion annulée.", "info")
+    elif maj == "erreur" and not est_compte_connecte():
+        afficher_erreur("La connexion a échoué.", conseil="Recommencez la connexion.")
 
 
 def afficher_dialog_auth_si_besoin() -> None:
