@@ -315,3 +315,72 @@ def test_se_connecter_avant_la_limite(appli):
     at.button(key="fermer").click().run()
     at.button(key="envoyer").click().run()  # requête suivante : pas de réouverture
     assert at.session_state["messages"][-1][0] == "ok" and not _formulaire_visible(at)
+
+
+# ── 4. Connexion Google / GitHub ────────────────────────────────────────────
+
+
+@pytest.fixture
+def oauth_configure(monkeypatch):
+    for fournisseur in ("GOOGLE", "GITHUB"):
+        monkeypatch.setenv(f"{fournisseur}_OAUTH_CLIENT_ID", f"id-{fournisseur.lower()}")
+        monkeypatch.setenv(f"{fournisseur}_OAUTH_CLIENT_SECRET", "secret")
+    monkeypatch.setenv("GOOGLE_OAUTH_REDIRECT_URI", "https://app.exemple/google")
+    monkeypatch.setenv("GITHUB_OAUTH_REDIRECT_URI", "https://app.exemple/github")
+
+
+def test_boutons_oauth_ouvrent_directement_le_fournisseur(appli, oauth_configure):
+    from urllib.parse import parse_qs, urlparse
+
+    _, jeton = appli
+    at = _ouvrir(jeton)
+    at.button(key="sb_login").click().run()
+    assert not at.exception, at.exception
+    liens = {e.proto.label: e.proto.url for e in at.get("link_button")}
+    google = urlparse(liens["Continuer avec Google"])
+    github = urlparse(liens["Continuer avec GitHub"])
+    assert google.netloc == "accounts.google.com"
+    assert github.netloc == "github.com" and github.path == "/login/oauth/authorize"
+    assert parse_qs(google.query)["redirect_uri"] == ["https://app.exemple/google"]
+    assert parse_qs(github.query)["redirect_uri"] == ["https://app.exemple/github"]
+
+    at.run()  # un nouveau rendu réutilise le même lien (état encore valide)
+    assert {e.proto.label: e.proto.url for e in at.get("link_button")} == liens
+
+
+SCRIPT_RETOUR_OAUTH = '''
+from app import auth_basique as a
+a._traiter_callback_oauth()
+'''
+
+
+def test_retour_oauth_attend_le_cookie_de_session(appli, oauth_configure, monkeypatch):
+    from streamlit.testing.v1 import AppTest
+    from app import auth_basique
+
+    db, jeton = appli
+    recus = []
+
+    def echanger(code, redirect):
+        recus.append((code, redirect))
+        return {"google_id": "g-1", "email": "eleve@exemple.com", "name": "Élève"}, "ok"
+
+    monkeypatch.setattr(auth_basique, "echanger_code_google", echanger)
+    state = "ggl.etat-test"
+    db.enregistrer_etat_oauth(state, "google", jeton)
+
+    at = AppTest.from_string(SCRIPT_RETOUR_OAUTH, default_timeout=30)
+    at.query_params["code"] = "code-google"
+    at.query_params["state"] = state
+    at.session_state["_jeton_session"] = "jeton-provisoire-nouvel-onglet"
+    at.session_state["_jeton_provisoire"] = True
+    at.run()
+    assert not at.exception, at.exception
+    assert recus == [] and at.query_params.get("code")  # rien de consommé avant le cookie
+
+    at.session_state["_jeton_session"] = jeton  # cookie lu : session d'origine
+    at.session_state["_jeton_provisoire"] = False
+    at.run()
+    assert not at.exception, at.exception
+    assert recus == [("code-google", "https://app.exemple/google")]
+    assert any(u.get("tier") == "google" for u in db.lister_users())

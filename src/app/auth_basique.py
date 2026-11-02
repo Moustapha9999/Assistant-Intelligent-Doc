@@ -55,7 +55,6 @@ def utilisateur_session() -> Optional[Dict[str, Any]]:
         return None
     return u
 
-
 def utilisateur_courant() -> str:
     u = utilisateur_session()
     if not u:
@@ -234,9 +233,11 @@ def _etat_oauth_valide(state: str, fournisseur: str) -> bool:
     )
 
 
-def _redirect_oauth() -> str:
+def _redirect_oauth(fournisseur: str = "") -> str:
+    propre = os.getenv(f"{fournisseur.upper()}_OAUTH_REDIRECT_URI", "").strip() if fournisseur else ""
     return (
-        os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "").strip()
+        propre
+        or os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "").strip()
         or os.getenv("GITHUB_OAUTH_REDIRECT_URI", "").strip()
         or "http://localhost:8501/"
     )
@@ -276,6 +277,10 @@ def _traiter_callback_oauth() -> None:
         return
     if not code:
         return
+    # Retour OAuth dans un nouvel onglet : tant que le cookie de session n'est pas lu, l'identité
+    # est provisoire et l'état (lié à la session) serait rejeté puis consommé à tort.
+    if st.session_state.get("_jeton_provisoire"):
+        return
     if isinstance(code, list):
         code = code[0]
     if isinstance(state, list):
@@ -296,8 +301,6 @@ def _traiter_callback_oauth() -> None:
             del st.query_params[k]
         except Exception:
             pass
-
-    redirect = _redirect_oauth()
 
     if provider == "apple":
         if not apple_oauth_configure():
@@ -325,7 +328,7 @@ def _traiter_callback_oauth() -> None:
         if not _etat_oauth_valide(state_s, "google"):
             _echec_oauth("Google", "état invalide ou expiré")
             return
-        profile, err = echanger_code_google(str(code), redirect)
+        profile, err = echanger_code_google(str(code), _redirect_oauth("google"))
         st.session_state.pop("google_auth_url", None)
         st.session_state.pop("oauth_provider", None)
         if not profile:
@@ -345,7 +348,7 @@ def _traiter_callback_oauth() -> None:
         if not _etat_oauth_valide(state_s, "github"):
             _echec_oauth("GitHub", "état invalide ou expiré")
             return
-        profile, err = echanger_code_github(str(code), redirect)
+        profile, err = echanger_code_github(str(code), _redirect_oauth("github"))
         st.session_state.pop("github_auth_url", None)
         st.session_state.pop("oauth_provider", None)
         if not profile:
@@ -374,15 +377,26 @@ def _nouvel_etat(fournisseur: str, generer) -> str:
     return state
 
 
-def _lancer_github() -> None:
-    state = _nouvel_etat("github", nouveau_state_github)
-    st.session_state["github_auth_url"] = url_autorisation_github(_redirect_oauth(), state)
+DUREE_URL_OAUTH_S = 300  # renouvelée bien avant l'expiration de l'état (10 min)
 
 
-def _lancer_google() -> None:
-    state = _nouvel_etat("google", nouveau_state_google)
-    redirect = os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "").strip() or _redirect_oauth()
-    st.session_state["google_auth_url"] = url_autorisation_google(redirect, state)
+def _url_oauth(fournisseur: str) -> str:
+    """Lien d'autorisation prêt à l'emploi ; nouvel état si la session a changé ou s'il vieillit."""
+    cle = f"{fournisseur}_auth_url"
+    jeton = _identite.jeton_session_courant()
+    cache = st.session_state.get(cle)
+    if (
+        isinstance(cache, dict)
+        and cache.get("jeton") == jeton
+        and time.time() - float(cache.get("t", 0)) < DUREE_URL_OAUTH_S
+    ):
+        return cache["url"]
+    if fournisseur == "google":
+        url = url_autorisation_google(_redirect_oauth("google"), _nouvel_etat("google", nouveau_state_google))
+    else:
+        url = url_autorisation_github(_redirect_oauth("github"), _nouvel_etat("github", nouveau_state_github))
+    st.session_state[cle] = {"url": url, "jeton": jeton, "t": time.time()}
+    return url
 
 
 def _lancer_apple() -> None:
@@ -467,22 +481,13 @@ def _contenu_modal_auth(
 
     # Social — Google puis GitHub (Apple retiré : trop complexe sans compte Developer)
     if google_oauth_configure():
-        if st.button(
+        st.link_button(
             "Continuer avec Google",
+            _url_oauth("google"),
             use_container_width=True,
             key=f"{key_prefix}_google",
             icon=":material/language:",
-        ):
-            _lancer_google()
-            st.rerun()
-        url_g = st.session_state.get("google_auth_url")
-        if url_g:
-            st.link_button(
-                "→ Autoriser sur Google",
-                url_g,
-                use_container_width=True,
-                type="primary",
-            )
+        )
     else:
         st.button(
             "Continuer avec Google",
@@ -495,22 +500,13 @@ def _contenu_modal_auth(
         st.caption("Google OAuth : ajoutez CLIENT_ID / SECRET dans `.env`.")
 
     if github_oauth_configure():
-        if st.button(
+        st.link_button(
             "Continuer avec GitHub",
+            _url_oauth("github"),
             use_container_width=True,
             key=f"{key_prefix}_github",
             icon=":material/code:",
-        ):
-            _lancer_github()
-            st.rerun()
-        url = st.session_state.get("github_auth_url")
-        if url:
-            st.link_button(
-                "→ Autoriser sur GitHub",
-                url,
-                use_container_width=True,
-                type="primary",
-            )
+        )
     else:
         st.button(
             "Continuer avec GitHub",
