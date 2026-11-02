@@ -174,6 +174,10 @@ def test_js_fenetre_verifie_origine_et_ne_transporte_pas_de_jeton():
     assert "INTERDITS" in _JS_COOKIE
     assert "BroadcastChannel" in _JS_COOKIE
     assert "window.close" in _JS_COOKIE
+    assert "setInterval" in _JS_COOKIE
+    assert "data.forcer" in _JS_COOKIE
+    assert "fermerFenetre" in _JS_COOKIE
+    assert "window.top.close" in _JS_COOKIE
     assert 'window.open(href, "assistdoc-oauth"' in _JS_COOKIE
     assert "accounts.google.com" in _JS_COOKIE
     assert "github.com" in _JS_COOKIE

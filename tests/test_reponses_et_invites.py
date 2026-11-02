@@ -372,6 +372,17 @@ from app import auth_basique as a
 a._traiter_callback_oauth()
 '''
 
+SCRIPT_FERMETURE_OAUTH = '''
+from app import auth_basique as a
+import streamlit as st
+a._traiter_callback_oauth()
+if a.est_fenetre_oauth():
+    a.afficher_fermeture_oauth()
+    st.session_state["page"] = "fermeture"
+    st.stop()
+st.session_state["page"] = "accueil"
+'''
+
 
 def test_retour_oauth_attend_le_cookie_de_session(appli, oauth_configure, monkeypatch):
     from streamlit.testing.v1 import AppTest
@@ -404,6 +415,7 @@ def test_retour_oauth_attend_le_cookie_de_session(appli, oauth_configure, monkey
     assert recus == [("code-google", "https://app.exemple/google", "verif-ggl")]
     assert any(u.get("tier") == "google" for u in db.lister_users())
     assert at.session_state[identite.CLE_OAUTH_SIGNAL] == "ok"
+    assert at.session_state["_oauth_fenetre"] is True
 
 
 def test_annulation_oauth_ne_cree_pas_de_session(appli, oauth_configure):
@@ -419,4 +431,27 @@ def test_annulation_oauth_ne_cree_pas_de_session(appli, oauth_configure):
     at.run()
     assert not at.exception, at.exception
     assert at.session_state[identite.CLE_OAUTH_SIGNAL] == "annule"
+    assert at.session_state["_oauth_fenetre"] is True
     assert not any(u.get("tier") == "google" for u in db.lister_users())
+
+
+def test_fenetre_oauth_ne_charge_pas_l_accueil(appli, oauth_configure):
+    from streamlit.testing.v1 import AppTest
+
+    _, jeton = appli
+    at = AppTest.from_string(SCRIPT_FERMETURE_OAUTH, default_timeout=30)
+    at.query_params["error"] = "access_denied"
+    at.query_params["state"] = "ggl.x"
+    at.session_state["_jeton_session"] = jeton
+    at.session_state["_jeton_provisoire"] = False
+    at.run()
+    assert not at.exception, at.exception
+    assert at.session_state["page"] == "fermeture"
+    assert at.session_state["_oauth_fenetre"] is True
+
+    principal = AppTest.from_string(SCRIPT_FERMETURE_OAUTH, default_timeout=30)
+    principal.session_state["_jeton_session"] = jeton
+    principal.session_state["_jeton_provisoire"] = False
+    principal.run()
+    assert not principal.exception, principal.exception
+    assert principal.session_state["page"] == "accueil"

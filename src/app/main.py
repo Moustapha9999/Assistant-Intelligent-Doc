@@ -49,6 +49,9 @@ est_admin_session = _auth_basique.est_admin_session
 # puis retour OAuth éventuel (rotation de session vers le compte).
 _auth_basique.exiger_auth()
 _auth_basique.prendre_en_compte_fenetre_oauth(_identite.synchroniser_cookie())
+if _auth_basique.est_fenetre_oauth():
+    _auth_basique.afficher_fermeture_oauth()
+    st.stop()
 
 _pages = [
     st.Page(

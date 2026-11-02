@@ -292,6 +292,41 @@ def _nettoyer_params_oauth() -> None:
             pass
 
 
+CLE_FENETRE_OAUTH = "_oauth_fenetre"
+
+
+def est_fenetre_oauth() -> bool:
+    """True dans la fenêtre secondaire de retour Google / GitHub (pas l'onglet principal)."""
+    if st.session_state.get(CLE_FENETRE_OAUTH):
+        return True
+    try:
+        qp = st.query_params
+    except Exception:
+        return False
+    return bool(qp.get("code") or qp.get("state") or qp.get("error") or qp.get("apple_error"))
+
+
+def afficher_fermeture_oauth() -> None:
+    """Page minimale : confirmer la connexion, sans charger l'interface de l'assistant."""
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebar"], [data-testid="stHeader"],
+        [data-testid="stToolbar"], [data-testid="stDecoration"] { display: none !important; }
+        .block-container { max-width: 28rem; padding-top: 4rem; text-align: center; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    if est_compte_connecte():
+        st.success("Connexion réussie. Cette fenêtre se ferme.")
+        st.caption("Si elle reste ouverte, fermez-la : l'application continue dans l'onglet d'origine.")
+    elif st.session_state.get("_jeton_provisoire"):
+        st.info("Connexion en cours…")
+    else:
+        st.caption("Vous pouvez fermer cette fenêtre.")
+
+
 def _traiter_callback_oauth() -> None:
     """Traite le retour OAuth Google ou GitHub (?code=&state= ou ?error=)."""
     try:
@@ -303,6 +338,8 @@ def _traiter_callback_oauth() -> None:
     erreur = qp.get("error")
     apple_name = qp.get("apple_name") or ""
     apple_err = qp.get("apple_error")
+    if code or state or erreur or apple_err:
+        st.session_state[CLE_FENETRE_OAUTH] = True
     if apple_err:
         try:
             del st.query_params["apple_error"]

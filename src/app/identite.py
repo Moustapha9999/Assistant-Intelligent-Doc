@@ -156,23 +156,39 @@ export default function(component) {
       localStorage.removeItem(CANAL);
     } catch (e) {}
   };
+  const fermerFenetre = () => {
+    try { window.close(); } catch (e) {}
+    try { if (window.top && window.top !== window) window.top.close(); } catch (e) {}
+  };
   const relireEtSignaler = (type) => {
     setStateValue("cookie", lire());
     setTriggerValue("oauth_maj", type);
   };
 
+  const q = window.location.search || "";
+  if (q.indexOf("code=") >= 0 || q.indexOf("state=") >= 0 || q.indexOf("error=") >= 0) {
+    try { window.name = "assistdoc-oauth"; } catch (e) {}
+  }
+
   if (data && data.nouveau) {
-    const secure = window.location.protocol === "https:" ? "; Secure" : "";
-    document.cookie = "assistdoc_sid=" + encodeURIComponent(data.nouveau)
-      + "; Max-Age=" + data.age + "; Path=/; SameSite=Lax" + secure;
+    const existant = lire();
+    if (data.forcer || !existant || existant === data.nouveau) {
+      const secure = window.location.protocol === "https:" ? "; Secure" : "";
+      document.cookie = "assistdoc_sid=" + encodeURIComponent(data.nouveau)
+        + "; Max-Age=" + data.age + "; Path=/; SameSite=Lax" + secure;
+    } else {
+      setStateValue("cookie", existant);
+      setTriggerValue("oauth_maj", "ok");
+    }
   }
   if (data && data.oauth_signal && TYPES[data.oauth_signal]) {
     diffuser(data.oauth_signal);
-    if (window.name === "assistdoc-oauth" || window.opener) {
-      setTimeout(() => { try { window.close(); } catch (e) {} }, 50);
-    }
+    fermerFenetre();
+    setTimeout(fermerFenetre, 50);
+    setTimeout(fermerFenetre, 400);
   }
-  setStateValue("cookie", lire());
+  let actuel = lire();
+  setStateValue("cookie", actuel);
 
   const urlOAuthOk = (u) => {
     try {
@@ -223,10 +239,19 @@ export default function(component) {
     } catch (e) {}
   };
   window.addEventListener("storage", onStorage);
+  const iv = setInterval(() => {
+    const v = lire();
+    if (v !== actuel) {
+      actuel = v;
+      setStateValue("cookie", v);
+      setTriggerValue("oauth_maj", "ok");
+    }
+  }, 800);
   return () => {
     window.removeEventListener("message", onMessage);
     window.removeEventListener("storage", onStorage);
     document.removeEventListener("click", onClickOAuth, true);
+    clearInterval(iv);
     if (canal) canal.close();
   };
 }
@@ -318,13 +343,17 @@ def identite_session() -> Identite:
 def connecter(user: Dict[str, Any]) -> Identite:
     st = _st()
     jeton = ouvrir_session_compte(users_db(), user, st.session_state.get("_jeton_session"))
-    return _appliquer(user, jeton)
+    ident = _appliquer(user, jeton)
+    st.session_state["_cookie_forcer"] = True
+    return ident
 
 
 def deconnecter() -> Identite:
     st = _st()
     invite, jeton = fermer_session(users_db(), st.session_state.get("_jeton_session"))
-    return _appliquer(invite, jeton)
+    ident = _appliquer(invite, jeton)
+    st.session_state["_cookie_forcer"] = True
+    return ident
 
 
 def jeton_session_courant() -> Optional[str]:
@@ -352,6 +381,8 @@ def synchroniser_cookie() -> Any:
     if a_ecrire:
         data["nouveau"] = a_ecrire[0]
         data["age"] = a_ecrire[1]
+        if st.session_state.pop("_cookie_forcer", None):
+            data["forcer"] = True
     signal = st.session_state.pop(CLE_OAUTH_SIGNAL, None)
     if signal:
         data["oauth_signal"] = signal
