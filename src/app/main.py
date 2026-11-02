@@ -31,8 +31,11 @@ import app.auth_basique as _auth_basique
 from app import identite as _identite
 from app import ui_composants as _ui_composants
 from app import ui_theme as _ui_theme
+from app import utilisateurs_sqlite as _utilisateurs_sqlite
 
-# Évite le cache Python/Streamlit d'une ancienne version
+# Évite le cache Python/Streamlit d'une ancienne version (ordre : données → identité → UI)
+importlib.reload(_utilisateurs_sqlite)
+importlib.reload(_identite)
 importlib.reload(_auth_basique)
 importlib.reload(_ui_theme)
 importlib.reload(_ui_composants)

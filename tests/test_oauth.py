@@ -181,6 +181,40 @@ def test_js_fenetre_verifie_origine_et_ne_transporte_pas_de_jeton():
     assert "composedPath" in _JS_COOKIE
 
 
+def test_migration_pkce_sur_ancienne_base(tmp_path, monkeypatch):
+    """Une base Cloud créée avant pkce_verifier doit accepter un enregistrement OAuth."""
+    import sqlite3
+
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    monkeypatch.delenv("STREAMLIT_PASSWORD", raising=False)
+    chemin = tmp_path / "ancienne.db"
+    with sqlite3.connect(chemin) as conn:
+        conn.executescript(
+            """
+            CREATE TABLE users (
+                id TEXT PRIMARY KEY, email TEXT, password_hash TEXT,
+                display_name TEXT NOT NULL DEFAULT '', tier TEXT NOT NULL DEFAULT 'guest',
+                suspended INTEGER NOT NULL DEFAULT 0, cree_le TEXT NOT NULL,
+                derniere_connexion TEXT
+            );
+            CREATE TABLE admin_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT, cree_le TEXT);
+            CREATE TABLE oauth_etats (
+                etat_hash TEXT PRIMARY KEY,
+                fournisseur TEXT NOT NULL,
+                session_hash TEXT,
+                expire_le TEXT NOT NULL
+            );
+            """
+        )
+    db = UtilisateursSQLite(chemin)
+    db.enregistrer_etat_oauth("ggl.old", "google", "jeton-x", pkce_verifier="verif-old")
+    recu: list = []
+    assert db.consommer_etat_oauth(
+        "ggl.old", "google", "jeton-x", pkce_out=recu
+    ) is True
+    assert recu == ["verif-old"]
+
+
 def test_etat_oauth_conserve_pkce(tmp_path, monkeypatch):
     monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
     monkeypatch.delenv("STREAMLIT_PASSWORD", raising=False)

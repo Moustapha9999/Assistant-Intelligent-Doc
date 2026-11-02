@@ -417,9 +417,13 @@ def exiger_auth() -> bool:
 def _nouvel_etat(fournisseur: str, generer) -> tuple[str, str]:
     state = generer()
     verifieur, challenge = pkce_paire()
-    _users_db().enregistrer_etat_oauth(
-        state, fournisseur, _identite.jeton_session_courant(), pkce_verifier=verifieur
-    )
+    jeton = _identite.jeton_session_courant()
+    db = _users_db()
+    try:
+        db.enregistrer_etat_oauth(state, fournisseur, jeton, pkce_verifier=verifieur)
+    except TypeError:
+        db.enregistrer_etat_oauth(state, fournisseur, jeton)
+        challenge = ""
     st.session_state.oauth_provider = fournisseur
     return state, challenge
 
@@ -450,9 +454,25 @@ def _url_oauth(fournisseur: str) -> str:
 
 def _lancer_oauth(fournisseur: str, label: str, key: str) -> None:
     """Lien vers le fournisseur ; le composant session transforme le clic en `window.open`."""
+    try:
+        url = _url_oauth(fournisseur)
+    except Exception as exc:
+        journal.warning("OAuth %s indisponible (%s)", fournisseur, type(exc).__name__)
+        st.button(
+            label,
+            use_container_width=True,
+            disabled=True,
+            key=key,
+            icon=":material/language:" if fournisseur == "google" else ":material/code:",
+        )
+        afficher_erreur(
+            f"La connexion avec {fournisseur.title()} est temporairement indisponible.",
+            conseil="Réessayez dans un instant, ou utilisez l'e-mail.",
+        )
+        return
     st.link_button(
         label,
-        _url_oauth(fournisseur),
+        url,
         use_container_width=True,
         key=key,
         icon=":material/language:" if fournisseur == "google" else ":material/code:",

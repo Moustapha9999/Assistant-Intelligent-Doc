@@ -241,11 +241,14 @@ def _st():
     return st
 
 
+SCHEMA_SESSIONS = 3  # incrémenter pour forcer une nouvelle instance (migration SQLite)
+
+
 def users_db() -> UtilisateursSQLite:
     st = _st()
 
     @st.cache_resource
-    def _instance() -> UtilisateursSQLite:
+    def _instance(_schema: int = SCHEMA_SESSIONS) -> UtilisateursSQLite:
         return UtilisateursSQLite()
 
     return _instance()

@@ -152,6 +152,12 @@ class UtilisateursSQLite:
     def _connect(self) -> sqlite3.Connection:
         return connecter(self.chemin)
 
+    @staticmethod
+    def _assurer_colonne_pkce(conn: sqlite3.Connection) -> None:
+        """Ajoute `pkce_verifier` sur une base créée avant cette colonne."""
+        if "pkce_verifier" not in colonnes(conn, "oauth_etats"):
+            conn.execute("ALTER TABLE oauth_etats ADD COLUMN pkce_verifier TEXT")
+
     def _init_db(self) -> None:
         if self.chemin.exists():
             with lecture(self.chemin) as conn:
@@ -232,9 +238,7 @@ class UtilisateursSQLite:
                 conn.execute(
                     f"CREATE INDEX IF NOT EXISTS idx_users_{col} ON users({col})"
                 )
-            cols_oauth = colonnes(conn, "oauth_etats")
-            if "pkce_verifier" not in cols_oauth:
-                conn.execute("ALTER TABLE oauth_etats ADD COLUMN pkce_verifier TEXT")
+            self._assurer_colonne_pkce(conn)
             cols_audit = colonnes(conn, "admin_audit")
             if "categorie" not in cols_audit:
                 conn.execute(
@@ -767,6 +771,7 @@ class UtilisateursSQLite:
     ) -> None:
         now = _maintenant()
         with ecriture(self.chemin) as conn:
+            self._assurer_colonne_pkce(conn)
             conn.execute("DELETE FROM oauth_etats WHERE expire_le < ?", (now.isoformat(),))
             conn.execute(
                 "INSERT OR REPLACE INTO oauth_etats "
@@ -797,6 +802,7 @@ class UtilisateursSQLite:
         if not etat:
             return False
         with ecriture(self.chemin) as conn:
+            self._assurer_colonne_pkce(conn)
             row = conn.execute(
                 "SELECT fournisseur, session_hash, expire_le, pkce_verifier "
                 "FROM oauth_etats WHERE etat_hash = ?",
