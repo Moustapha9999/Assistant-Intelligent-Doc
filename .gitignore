@@ -46,6 +46,12 @@ logs/
 
 # IDE
 .vscode/
+.cursor/
+.claude/
+
+# Présoutenance : aperçus et anciennes versions locales
+_preview*/
+_archives/
 
 # OS
 .DS_Store
