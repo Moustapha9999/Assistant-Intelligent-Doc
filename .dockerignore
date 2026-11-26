@@ -23,36 +23,46 @@ deploy/
 # Données (montées en volume par docker-compose)
 data/
 qdrant_storage/
-qdrant_storage;C/
 .claude/
 cache_huggingface/
 models_cache/
+src/models_cache/
 
-# Git
+# Git / CI / tests (non requis à l'exécution)
 .git/
 .gitignore
+.github/
+tests/
+pytest.ini
+requirements-dev.txt
 
-# IDE
+# IDE / archives locales
 .idea/
 .vscode/
 *.iml
+_archives/
+_preview*/
 
 # Logs
 logs/
 *.log
 
 # Résultats temporaires
-resultats/metrics/
-resultats/rapports/
+resultats/
 
 # Docker
 docker/
 Dockerfile
 .dockerignore
 
-# Documentation
+# Documentation / soutenance (hors image runtime)
 docs/
 notebooks/
+knowledge/
+scripts/
+Mémoire-Master.docx
+Pres-soutenance.pptx
+README.md
 
 # OS
 .DS_Store
