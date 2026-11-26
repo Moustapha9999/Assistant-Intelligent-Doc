@@ -9,7 +9,7 @@ enableCORS = true
 
 [theme]
 base = "dark"
-backgroundColor = "#0D1117"
-secondaryBackgroundColor = "#161B22"
-textColor = "#E6EDF3"
-primaryColor = "#58A6FF"
+backgroundColor = "#000000"
+secondaryBackgroundColor = "#1a1a1a"
+textColor = "#f5f4ef"
+primaryColor = "#5b9fd4"

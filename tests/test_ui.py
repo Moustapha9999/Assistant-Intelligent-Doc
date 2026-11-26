@@ -244,9 +244,13 @@ def test_apptest_annuler_puis_confirmer(app_test):
     _boutons(at)["danger_suppr_confirmer"].click().run()
     assert at.session_state["appels"] == 1
     assert at.session_state["base"] == ["b"]
-    assert [t.value for t in at.toast] == ["Conversation supprimée."]
+    assert any("Conversation supprimée." in (m.value or "") for m in at.markdown), "notification centrée absente"
+    assert any("assist-notif" in (m.value or "") for m in at.markdown)
     assert not _fenetre_ouverte(at), "la fenêtre se ferme après succès"
-    assert not at.toast, "la notification n'est affichée qu'une fois"
+    at.run()
+    assert not any(
+        "Conversation supprimée." in (m.value or "") for m in at.markdown
+    ), "la notification n'est affichée qu'une fois"
 
 
 def test_apptest_echec_garde_la_fenetre_ouverte(app_test):
@@ -262,3 +266,4 @@ def test_apptest_echec_garde_la_fenetre_ouverte(app_test):
     assert _fenetre_ouverte(at), "la fenêtre reste ouverte pour réessayer ou annuler"
     assert not at.error, "le message d'échec n'est pas répété à chaque rerun"
     assert not at.toast
+

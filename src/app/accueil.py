@@ -12,7 +12,6 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from retrieval.retrieval_hybride import RetrievalHybride
 from generation import generateur_reponse as _generateur_reponse
 
 importlib.reload(_generateur_reponse)
@@ -22,7 +21,7 @@ demande_generation_image = _generateur_reponse.demande_generation_image
 est_demande_projet = _generateur_reponse.est_demande_projet
 est_cahier_des_charges = _generateur_reponse.est_cahier_des_charges
 est_salutation = _generateur_reponse.est_salutation
-from core.orchestrateur import OrchestrateurAssistant
+# Orchestrateur / sentence-transformers : import différé dans charger() (~25s)
 from app.gestionnaire_fichiers import (
     fichiers_de_rappel,
     formater_pour_prompt,
@@ -47,6 +46,12 @@ from app.ui_composants import (
     notifier,
     pied_dialogue,
     texte_dialogue,
+)
+from app.edition_conversation import (
+    appliquer_edition_contenu,
+    appliquer_edition_prompt,
+    edition_autorisee,
+    resync_historique_llm,
 )
 from securite.acces import VueProprietaire
 from app.auth_basique import (
@@ -123,16 +128,17 @@ CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-    --bg: #262624;
-    --bg-side: #1f1e1d;
-    --bg-elev: #30302e;
-    --bg-input: #30302e;
-    --border: #3d3d3a;
+    /* Full Black : surfaces principales ; les composants gardent leurs teintes */
+    --bg: #000000;
+    --bg-side: #050505;
+    --bg-elev: #1a1a1a;
+    --bg-input: #1a1a1a;
+    --border: #2a2a2a;
     --text: #f5f4ef;
-    --text-muted: #b0aea5;
-    --text-dim: #8a877c;
+    --text-muted: #c4c2b8;
+    --text-dim: #9a978c;
     --accent: #5b9fd4;
-    --code-bg: #2a3540;
+    --code-bg: #121820;
     --code-fg: #a8d4f0;
 }
 
@@ -212,8 +218,8 @@ section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
     margin: 8px 0 10px 0;
     padding: 14px 14px 12px;
     border-radius: 14px;
-    background: #0d0d0d;
-    border: 1px solid rgba(255,255,255,0.08);
+    background: #111111;
+    border: 1px solid rgba(255,255,255,0.10);
 }
 .sb-promo-title {
     font-size: 14px;
@@ -266,6 +272,17 @@ section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
 
 /* ── Chat ── */
 .chat-wrap { max-width: 720px; margin: 0 auto; padding: 4px 24px 200px; }
+@media (max-width: 768px) {
+    .chat-wrap { padding: 4px 12px 180px; }
+    .topbar { padding: 12px 14px 8px; }
+    .wtitle { font-size: 26px; }
+}
+@media (max-width: 420px) {
+    .chat-wrap { padding: 4px 8px 170px; }
+    div[class*="st-key-msg_user_"] [data-testid="stChatMessageContent"] {
+        max-width: min(520px, calc(100vw - 48px)) !important;
+    }
+}
 .welcome {
     text-align: center; padding: 28px 20px 20px;
     max-width: 520px; margin: 0 auto;
@@ -301,7 +318,7 @@ section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
 }
 .src-tag:hover { color: var(--accent); }
 
-.tdots { display: flex; gap: 5px; align-items: center; padding: 8px 0; }
+.tdots { display: flex; gap: 5px; align-items: center; padding: 2px 0; }
 .tdots span {
     width: 6px; height: 6px; border-radius: 50%;
     background: var(--text-dim); animation: bounce 1.2s infinite;
@@ -309,79 +326,43 @@ section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
 .tdots span:nth-child(2) { animation-delay: 0.2s; }
 .tdots span:nth-child(3) { animation-delay: 0.4s; }
 @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-5px)} }
-.tlabel { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+.tlabel { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
 
-/* Pendant la réflexion : fond flou, composer estompé */
-.thinking-stage {
-    position: relative;
-    min-height: 120px;
-    margin: 8px 0 24px;
-    padding: 28px 20px 22px;
-    border-radius: 18px;
-    overflow: hidden;
-}
-.thinking-stage-bg {
-    position: absolute; inset: 0;
-    background:
-        radial-gradient(ellipse 60% 50% at 20% 40%, rgba(91,159,212,0.22), transparent 70%),
-        radial-gradient(ellipse 50% 45% at 80% 60%, rgba(120,100,180,0.16), transparent 70%),
-        radial-gradient(ellipse 40% 35% at 50% 80%, rgba(255,255,255,0.04), transparent 70%);
-    filter: blur(28px);
-    transform: scale(1.15);
-    pointer-events: none;
-}
-.thinking-stage-fg {
-    position: relative; z-index: 1;
-    display: flex; flex-direction: column; align-items: flex-start;
-    gap: 6px;
-}
-.thinking-chips {
-    display: flex; flex-wrap: wrap; gap: 8px;
-    margin-top: 14px; max-width: 520px;
-}
-.thinking-chip {
-    height: 34px; border-radius: 10px;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.07);
-    filter: blur(1.5px);
-    opacity: 0.45;
-    flex: 1 1 140px;
-    min-width: 120px;
-    max-width: 200px;
-}
-.thinking-chip:nth-child(2) { opacity: 0.32; filter: blur(2px); }
-.thinking-chip:nth-child(3) { opacity: 0.28; filter: blur(2.5px); flex-basis: 160px; }
-.thinking-chip:nth-child(4) { opacity: 0.22; filter: blur(3px); }
-/* Composer flouté tant que la scène de réflexion est visible */
-section.main:has(.thinking-stage) [data-testid="stChatInput"],
-section.main:has(.thinking-stage) .composer-hint,
-section.main:has(.thinking-stage) .st-key-composer_outils {
-    filter: blur(5px) !important;
-    opacity: 0.35 !important;
-    pointer-events: none !important;
-    user-select: none !important;
+/* Indicateur de réflexion compact — dans le bloc assistant uniquement */
+.thinking-inline {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 2px 0 6px;
+    min-height: 0;
 }
 
-/* Messages — user à droite, IA à gauche */
+/* Messages — user à droite, IA à gauche (sans avatars) */
 [data-testid="stChatMessage"] {
     background: transparent !important;
     padding: 10px 0 !important;
     max-width: 780px; margin: 0 auto;
-    gap: 12px !important;
+    gap: 0 !important;
     display: flex !important;
     width: 100% !important;
+    align-items: flex-start !important;
 }
-[data-testid="stChatMessage"] img,
-[data-testid="stChatMessage"] [data-testid="stChatMessageAvatarUser"],
-[data-testid="stChatMessage"] [data-testid="stChatMessageAvatarAssistant"] {
-    background: var(--bg-elev) !important;
+/* Masquer totalement les avatars Streamlit (espace réservé inclus) */
+[data-testid="stChatMessageAvatarUser"],
+[data-testid="stChatMessageAvatarAssistant"],
+[data-testid="stChatMessage"] > div:has(> [data-testid="stChatMessageAvatarUser"]),
+[data-testid="stChatMessage"] > div:has(> [data-testid="stChatMessageAvatarAssistant"]) {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
     border: none !important;
-    border-radius: 50% !important;
-    width: 28px !important; height: 28px !important;
-    font-size: 11px !important;
-    flex-shrink: 0 !important;
+    overflow: hidden !important;
 }
-/* Images jointes ou générées : taille réelle, pas le format avatar ci-dessus */
+/* Images jointes ou générées : taille réelle */
 [data-testid="stChatMessageContent"] [data-testid="stImage"] img {
     width: auto !important; height: auto !important;
     max-width: 100% !important; max-height: 320px !important;
@@ -397,56 +378,85 @@ section.main:has(.thinking-stage) .st-key-composer_outils {
     color: var(--text) !important;
     line-height: 1.7 !important;
     max-width: min(560px, 85%) !important;
+    min-width: 0 !important;
 }
 
-/* User → droite */
-[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
-    flex-direction: row-reverse !important;
-    justify-content: flex-start !important;
+/* Bloc utilisateur : bulle + actions regroupées à droite */
+div[class*="st-key-msg_user_"] {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    width: 100% !important;
+    max-width: 780px;
+    margin: 0 auto 4px !important;
+    gap: 0 !important;
 }
-[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageContent"] {
-    background: rgba(91,159,212,0.12) !important;
-    border: 1px solid rgba(91,159,212,0.22) !important;
+div[class*="st-key-msg_user_"] [data-testid="stChatMessage"] {
+    width: fit-content !important;
+    max-width: min(640px, 100%) !important;
+    margin: 0 !important;
+    margin-left: auto !important;
+    justify-content: flex-end !important;
+}
+div[class*="st-key-msg_user_"] > [data-testid="stElementContainer"],
+div[class*="st-key-msg_user_"] > div {
+    width: auto !important;
+    max-width: 100% !important;
+}
+
+/* User → droite, bulle sans avatar */
+div[class*="st-key-msg_user_"] [data-testid="stChatMessageContent"] {
+    background: rgba(91,159,212,0.20) !important;
+    border: 1px solid rgba(91,159,212,0.38) !important;
     border-radius: 16px 16px 4px 16px !important;
     padding: 12px 16px !important;
-    color: var(--text) !important;
+    color: #f7f6f2 !important;
     font-family: 'Inter', sans-serif !important;
     font-size: 15px !important;
     font-weight: 500 !important;
+    line-height: 1.55 !important;
     flex: 0 1 auto !important;
     width: fit-content !important;
+    max-width: min(520px, calc(100vw - 64px)) !important;
     min-width: 0 !important;
-    margin-left: auto !important;
+    margin-left: 0 !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
 }
-[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageContent"] [data-testid="stVerticalBlock"],
-[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageContent"] [data-testid="stElementContainer"] {
+div[class*="st-key-msg_user_"] [data-testid="stChatMessageContent"] [data-testid="stVerticalBlock"],
+div[class*="st-key-msg_user_"] [data-testid="stChatMessageContent"] [data-testid="stElementContainer"] {
     width: auto !important;
     gap: 2px !important;
 }
-[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageContent"] p:last-child {
+div[class*="st-key-msg_user_"] [data-testid="stChatMessageContent"] p:last-child {
     margin-bottom: 0 !important;
 }
-/* Streamlit met une marge basse négative sur le markdown : le texte débordait du bas de la bulle */
-[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stMarkdownContainer"] {
+div[class*="st-key-msg_user_"] [data-testid="stMarkdownContainer"] {
     margin-bottom: 0 !important;
 }
 
-/* Barre d'actions sous un message : copier / modifier / pouce haut / pouce bas */
+/* Barre d'actions : compacte, collée au message */
 div[class*="st-key-tbrow_"] {
     gap: 0 !important;
     margin: 2px 0 0 0 !important;
+    width: fit-content !important;
+    max-width: 100% !important;
 }
-/* Sous la bulle utilisateur, alignée sur son bord droit (avatar 28px + espacement 12px) */
 div[class*="st-key-tbrow_user_"] {
-    margin: -14px 0 0 0 !important;
-    padding-right: 40px !important;
+    margin: 2px 0 0 0 !important;
+    padding-right: 0 !important;
+    align-self: flex-end !important;
+}
+div[class*="st-key-tbrow_assistant_"] {
+    margin: 4px 0 0 0 !important;
 }
 div[class*="st-key-tbrow_"] [data-testid="stElementContainer"] {
     width: auto !important;
     flex: 0 0 auto !important;
 }
 div[class*="st-key-tbrow_"] iframe {
-    width: 60px !important;
+    width: 32px !important;
+    max-width: 32px !important;
     display: block;
 }
 div[class*="st-key-tbrow_"] .stButton button {
@@ -467,23 +477,99 @@ div[class*="st-key-tbrow_"] .stButton button [data-testid="stIconMaterial"] {
     margin: 0 !important;
 }
 
-/* IA → gauche */
-[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {
+/* Desktop : actions au survol ; mobile / tactile : toujours visibles */
+@media (hover: hover) and (pointer: fine) {
+    div[class*="st-key-msg_user_"] div[class*="st-key-tbrow_"],
+    div[class*="st-key-msg_assistant_"] div[class*="st-key-tbrow_"] {
+        opacity: 0;
+        transition: opacity .15s ease;
+    }
+    div[class*="st-key-msg_user_"]:hover div[class*="st-key-tbrow_"],
+    div[class*="st-key-msg_user_"]:focus-within div[class*="st-key-tbrow_"],
+    div[class*="st-key-msg_assistant_"]:hover div[class*="st-key-tbrow_"],
+    div[class*="st-key-msg_assistant_"]:focus-within div[class*="st-key-tbrow_"] {
+        opacity: 1;
+    }
+}
+
+/* Bloc IA → gauche, sans avatar */
+div[class*="st-key-msg_assistant_"] {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    width: 100% !important;
+    max-width: 780px;
+    margin: 6px auto 14px !important;
+    gap: 0 !important;
+}
+div[class*="st-key-msg_assistant_"] [data-testid="stChatMessage"] {
     flex-direction: row !important;
     justify-content: flex-start !important;
+    margin: 0 !important;
+    width: 100% !important;
 }
-[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) [data-testid="stChatMessageContent"] {
+div[class*="st-key-msg_assistant_"] [data-testid="stChatMessageContent"] {
     text-align: left !important;
+    max-width: min(680px, 94%) !important;
+    color: #f0eee8 !important;
 }
-[data-testid="stChatMessageContent"] p { margin: 0 0 0.85em !important; }
+[data-testid="stChatMessageContent"] p { margin: 0 0 0.95em !important; line-height: 1.75 !important; }
+[data-testid="stChatMessageContent"] ul,
+[data-testid="stChatMessageContent"] ol {
+    margin: 0.35em 0 1em !important;
+    padding-left: 1.35em !important;
+}
+[data-testid="stChatMessageContent"] li {
+    margin: 0.28em 0 !important;
+    line-height: 1.65 !important;
+}
+[data-testid="stChatMessageContent"] li > p { margin-bottom: 0.35em !important; }
+[data-testid="stChatMessageContent"] blockquote {
+    margin: 0.8em 0 !important;
+    padding: 0.35em 0 0.35em 14px !important;
+    border-left: 3px solid rgba(91,159,212,0.55) !important;
+    color: var(--text-muted) !important;
+}
+[data-testid="stChatMessageContent"] table {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-collapse: collapse !important;
+    margin: 0.85em 0 1.1em !important;
+    font-size: 13.5px !important;
+    font-family: 'Inter', sans-serif !important;
+    display: block !important;
+    overflow-x: auto !important;
+}
+[data-testid="stChatMessageContent"] th,
+[data-testid="stChatMessageContent"] td {
+    border: 1px solid rgba(255,255,255,0.12) !important;
+    padding: 8px 12px !important;
+    text-align: left !important;
+    vertical-align: top !important;
+}
+[data-testid="stChatMessageContent"] th {
+    background: rgba(255,255,255,0.06) !important;
+    color: #f5f4ef !important;
+    font-weight: 600 !important;
+}
+[data-testid="stChatMessageContent"] td { color: #e8e6df !important; }
+[data-testid="stChatMessageContent"] tr:nth-child(even) td {
+    background: rgba(255,255,255,0.025) !important;
+}
+[data-testid="stChatMessageContent"] hr {
+    border: none !important;
+    border-top: 1px solid rgba(255,255,255,0.10) !important;
+    margin: 1.2em 0 !important;
+}
 [data-testid="stChatMessageContent"] pre {
-    background: #1a1918 !important;
-    border: 1px solid rgba(255,255,255,0.08) !important;
+    background: #0d0d0d !important;
+    border: 1px solid rgba(255,255,255,0.12) !important;
     border-radius: 12px !important;
     padding: 16px !important;
     overflow-x: auto !important;
     font-size: 13px !important;
     font-family: 'JetBrains Mono', monospace !important;
+    margin: 0.75em 0 1.1em !important;
 }
 [data-testid="stChatMessageContent"] code {
     font-family: 'JetBrains Mono', monospace !important;
@@ -497,19 +583,54 @@ div[class*="st-key-tbrow_"] .stButton button [data-testid="stIconMaterial"] {
 [data-testid="stChatMessageContent"] pre code {
     background: none !important; padding: 0 !important; color: #e8e6df !important;
 }
-[data-testid="stChatMessageContent"] a { color: #7eb8e0 !important; }
-[data-testid="stChatMessageContent"] strong { color: var(--text) !important; font-weight: 600 !important; }
+[data-testid="stChatMessageContent"] a { color: #8ec4ea !important; text-decoration: none !important; }
+[data-testid="stChatMessageContent"] a:hover { text-decoration: underline !important; color: #a8d4f0 !important; }
+[data-testid="stChatMessageContent"] strong { color: #ffffff !important; font-weight: 600 !important; }
 [data-testid="stChatMessageContent"] h1,
 [data-testid="stChatMessageContent"] h2,
 [data-testid="stChatMessageContent"] h3 {
     font-family: 'Source Serif 4', Georgia, serif !important;
-    color: var(--text) !important;
+    color: #ffffff !important;
     font-weight: 600 !important;
-    margin: 1.1em 0 0.45em !important;
+    margin: 1.25em 0 0.5em !important;
+    line-height: 1.35 !important;
 }
-[data-testid="stChatMessageContent"] h1 { font-size: 1.35em !important; }
-[data-testid="stChatMessageContent"] h2 { font-size: 1.2em !important; }
-[data-testid="stChatMessageContent"] h3 { font-size: 1.08em !important; }
+[data-testid="stChatMessageContent"] h1 { font-size: 1.4em !important; }
+[data-testid="stChatMessageContent"] h2 { font-size: 1.22em !important; }
+[data-testid="stChatMessageContent"] h3 { font-size: 1.1em !important; }
+[data-testid="stChatMessageContent"] h1:first-child,
+[data-testid="stChatMessageContent"] h2:first-child,
+[data-testid="stChatMessageContent"] h3:first-child { margin-top: 0.15em !important; }
+
+/* Éditeur inline d'un prompt utilisateur (st.form) — hauteur adaptive via JS */
+div[class*="st-key-edit_box_"] {
+    width: min(520px, 100%) !important;
+    margin: 0 0 4px auto !important;
+}
+div[class*="st-key-edit_box_"] [data-testid="stForm"] {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+}
+div[class*="st-key-edit_box_"] textarea {
+    background: #121212 !important;
+    border: 1px solid rgba(91,159,212,0.45) !important;
+    border-radius: 14px !important;
+    color: #f5f4ef !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 15px !important;
+    line-height: 1.55 !important;
+    min-height: 68px !important;
+    max-height: 320px !important;
+    overflow-y: auto !important;
+    resize: none !important;
+    field-sizing: content;
+}
+div[class*="st-key-edit_box_"] .stFormSubmitButton button,
+div[class*="st-key-edit_box_"] .stButton button {
+    min-height: 34px !important;
+    border-radius: 10px !important;
+}
 
 /* ── Input flottant style Claude ── */
 .input-zone {
@@ -528,6 +649,7 @@ div[class*="st-key-tbrow_"] .stButton button [data-testid="stIconMaterial"] {
 [data-testid="stChatInput"] {
     max-width: 720px;
     margin: 0 auto;
+    width: 100%;
 }
 [data-testid="stChatInput"] > div {
     background: var(--bg-input) !important;
@@ -798,168 +920,722 @@ div[class*="st-key-tbrow_"] .stButton button:focus-visible,
 """
 st.markdown(CSS, unsafe_allow_html=True)
 
-# Flèche scroll bas injectée dans le parent Streamlit
+# Smart auto-scroll + flèche « revenir en bas » (injectés dans le parent Streamlit)
 components.html(
     """
     <script>
     (function () {
       const doc = window.parent.document;
+      const win = window.parent;
+      const SCROLL_VERSION = 10;
+      const NEAR_BOTTOM_PX = 96;
 
-      // Styles dans le parent (sinon #assist-scroll-btn est invisible)
-      if (!doc.getElementById('assist-scroll-style')) {
-        const style = doc.createElement('style');
-        style.id = 'assist-scroll-style';
+      // ── Smart scroll (singleton versionné : survit aux reruns sans fuite) ──
+      (function initSmartScroll() {
+        if (win._assistSmartScroll && win._assistSmartScroll.version === SCROLL_VERSION) {
+          win._assistSmartScroll.refresh();
+          return;
+        }
+        if (win._assistSmartScroll && typeof win._assistSmartScroll.destroy === 'function') {
+          try { win._assistSmartScroll.destroy(); } catch (e) {}
+        }
+
+        // États : FOLLOWING_BOTTOM | READING_HISTORY | RETURNING_BOTTOM
+        let mode = 'FOLLOWING_BOTTOM';
+        let pinnedTop = 0;
+        let suppressScrollEvent = false;
+        let scrollEl = null;
+        let returnTimer = null;
+        let rafPending = false;
+        let pinRaf = null;
+        let lastScrollHeight = 0;
+        let userScrollingUp = false;
+        let userScrollUpTimer = null;
+        let userIntentDown = false;
+        let userIntentDownTimer = null;
+        let pointerActive = false;
+        let touchStartY = null;
+
+        let style = doc.getElementById('assist-scroll-style');
+        if (!style) {
+          style = doc.createElement('style');
+          style.id = 'assist-scroll-style';
+          doc.head.appendChild(style);
+        }
         style.textContent = `
           #assist-scroll-btn {
             position: fixed !important;
-            bottom: 110px !important;
-            left: 50% !important;
-            transform: translateX(-50%) !important;
+            left: 50%;
+            bottom: max(124px, calc(env(safe-area-inset-bottom, 0px) + 112px)) !important;
+            transform: translateX(-50%) translateY(6px) scale(0.96) !important;
             z-index: 2147483646 !important;
-            width: 36px !important;
-            height: 36px !important;
+            width: 34px !important;
+            height: 34px !important;
             border-radius: 50% !important;
-            border: 1px solid rgba(255,255,255,0.18) !important;
-            background: rgba(48,48,46,0.96) !important;
+            border: 1px solid rgba(255,255,255,0.14) !important;
+            background: rgba(36,36,34,0.94) !important;
+            color: #f5f4ef !important;
             cursor: pointer !important;
-            display: none;
+            display: flex !important;
             align-items: center !important;
             justify-content: center !important;
-            box-shadow: 0 4px 18px rgba(0,0,0,0.45) !important;
-            backdrop-filter: blur(10px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.42) !important;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             padding: 0 !important;
             margin: 0 !important;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .18s ease, transform .18s ease, background .15s ease, border-color .15s ease !important;
           }
-          #assist-scroll-btn.show { display: flex !important; }
+          #assist-scroll-btn.show {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translate(-50%, 0) scale(1) !important;
+          }
           #assist-scroll-btn:hover {
-            background: rgba(70,70,66,0.98) !important;
-            border-color: rgba(255,255,255,0.28) !important;
+            background: rgba(52,52,48,0.98) !important;
+            border-color: rgba(255,255,255,0.24) !important;
+          }
+          #assist-scroll-btn:active {
+            transform: translate(-50%, 1px) scale(0.97) !important;
+          }
+          #assist-scroll-btn:focus-visible {
+            outline: 2px solid rgba(91,159,212,0.7) !important;
+            outline-offset: 2px !important;
           }
           #assist-scroll-btn svg {
-            width: 16px; height: 16px;
+            width: 15px; height: 15px;
             stroke: #f5f4ef; fill: none;
             stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;
           }
+          @media (max-width: 768px) {
+            #assist-scroll-btn {
+              width: 32px !important;
+              height: 32px !important;
+              bottom: max(132px, calc(env(safe-area-inset-bottom, 0px) + 120px)) !important;
+            }
+          }
+          @media (max-width: 420px) {
+            #assist-scroll-btn {
+              width: 30px !important;
+              height: 30px !important;
+              bottom: max(142px, calc(env(safe-area-inset-bottom, 0px) + 130px)) !important;
+            }
+          }
+          /* Ancrage navigateur : la croissance du stream ne tire pas le viewport */
+          [data-testid="stMain"],
+          [data-testid="stMain"] [data-testid="stMainBlockContainer"],
+          [data-testid="stMain"] [data-testid="stChatMessage"],
+          [data-testid="stMain"] [data-testid="stMarkdownContainer"] {
+            overflow-anchor: none !important;
+          }
         `;
-        doc.head.appendChild(style);
-      }
 
-      let btn = doc.getElementById('assist-scroll-btn');
-      if (!btn) {
-        btn = doc.createElement('button');
-        btn.id = 'assist-scroll-btn';
-        btn.title = 'Descendre en bas';
-        btn.setAttribute('aria-label', 'Descendre en bas');
-        btn.type = 'button';
-        btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>';
-        doc.body.appendChild(btn);
-      }
-
-      function getScrollEl() {
-        const candidates = [
-          doc.querySelector('[data-testid="stAppViewContainer"]'),
-          doc.querySelector('.main'),
-          doc.querySelector('section.main'),
-          doc.scrollingElement,
-          doc.documentElement,
-          doc.body,
-        ];
-        for (const el of candidates) {
-          if (el && el.scrollHeight > el.clientHeight + 40) return el;
+        let btn = doc.getElementById('assist-scroll-btn');
+        if (!btn) {
+          btn = doc.createElement('button');
+          btn.id = 'assist-scroll-btn';
+          btn.type = 'button';
+          doc.body.appendChild(btn);
         }
-        return candidates[0] || doc.documentElement;
-      }
+        btn.title = 'Revenir en bas';
+        btn.setAttribute('aria-label', 'Revenir en bas de la conversation');
+        btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
 
-      function nearBottom() {
-        const el = getScrollEl();
-        if (!el) return true;
-        const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
-        return gap < 120;
-      }
-
-      function update() {
-        if (nearBottom()) btn.classList.remove('show');
-        else btn.classList.add('show');
-      }
-
-      function scrollBottom() {
-        const el = getScrollEl();
-        if (el) {
-          el.scrollTo({ top: el.scrollHeight + 500, behavior: 'smooth' });
-          // double passe pour le padding bas
-          setTimeout(() => {
-            el.scrollTop = el.scrollHeight;
-            update();
-          }, 280);
+        function getScrollEl() {
+          // Conteneur réel Streamlit (overflow:auto) — pas stAppViewContainer (overflow:hidden)
+          const preferred = doc.querySelector('[data-testid="stMain"]');
+          if (preferred) return preferred;
+          const candidates = [
+            doc.querySelector('section.main'),
+            doc.querySelector('.main'),
+            doc.scrollingElement,
+            doc.documentElement,
+          ];
+          for (const el of candidates) {
+            if (el && el.scrollHeight > el.clientHeight + 40) return el;
+          }
+          return preferred || candidates[0] || doc.documentElement;
         }
-        try {
-          window.parent.scrollTo({ top: (doc.body.scrollHeight || 0) + 500, behavior: 'smooth' });
-        } catch (e) {}
-      }
 
-      btn.onclick = scrollBottom;
+        function gapFromBottom(el) {
+          if (!el) return 0;
+          return el.scrollHeight - el.scrollTop - el.clientHeight;
+        }
 
-      const el = getScrollEl();
-      if (el && !el._assistScrollBound) {
-        el.addEventListener('scroll', update, { passive: true });
-        el._assistScrollBound = true;
-      }
-      if (!window.parent._assistScrollBound) {
-        window.parent.addEventListener('scroll', update, { passive: true });
-        window.parent._assistScrollBound = true;
-      }
-      setInterval(update, 400);
-      update();
+        function nearBottom(el) {
+          return gapFromBottom(el || getScrollEl()) < NEAR_BOTTOM_PX;
+        }
 
-      // Composer : rendre le focus au champ à la fin d'une réponse (placeholder « Réflexion… »).
+        function setButtonVisible(visible) {
+          if (visible) btn.classList.add('show');
+          else btn.classList.remove('show');
+        }
+
+        function positionButton() {
+          // Centre sur stMain ; bottom dynamique juste au-dessus du composer (s'il est visible)
+          const main = doc.querySelector('[data-testid="stMain"]');
+          const input = doc.querySelector('[data-testid="stChatInput"]');
+          if (main) {
+            const r = main.getBoundingClientRect();
+            btn.style.setProperty('left', Math.round(r.left + r.width / 2) + 'px', 'important');
+          } else {
+            btn.style.setProperty('left', '50%', 'important');
+          }
+          const floor = win.matchMedia('(max-width: 420px)').matches ? 130
+            : win.matchMedia('(max-width: 768px)').matches ? 120 : 112;
+          if (input) {
+            const ir = input.getBoundingClientRect();
+            const vh = win.innerHeight || doc.documentElement.clientHeight || 0;
+            if (ir.height > 8 && ir.top > 40 && ir.top < vh - 8) {
+              const bottom = Math.round(vh - ir.top + 12);
+              btn.style.setProperty('bottom', Math.max(bottom, floor) + 'px', 'important');
+              return;
+            }
+          }
+          btn.style.setProperty('bottom', floor + 'px', 'important');
+        }
+
+        function syncButton() {
+          positionButton();
+          setButtonVisible(mode !== 'FOLLOWING_BOTTOM' && !nearBottom());
+        }
+
+        function setMode(next) {
+          if (mode === next) {
+            syncButton();
+            return;
+          }
+          mode = next;
+          if (mode === 'FOLLOWING_BOTTOM') pinnedTop = 0;
+          if (mode === 'READING_HISTORY') startPinLoop();
+          else stopPinLoop();
+          syncButton();
+        }
+
+        function withSuppressedScroll(fn) {
+          suppressScrollEvent = true;
+          try { fn(); }
+          finally {
+            // 2 frames : laisse passer les scroll events synthétiques Streamlit
+            requestAnimationFrame(function () {
+              requestAnimationFrame(function () {
+                suppressScrollEvent = false;
+              });
+            });
+          }
+        }
+
+        function stickToBottom(smooth) {
+          const el = getScrollEl();
+          if (!el) return;
+          const top = el.scrollHeight + 200;
+          withSuppressedScroll(function () {
+            if (smooth) el.scrollTo({ top: top, behavior: 'smooth' });
+            else el.scrollTop = top;
+          });
+        }
+
+        function restorePinned() {
+          const el = getScrollEl();
+          if (!el || mode !== 'READING_HISTORY') return;
+          if (Math.abs(el.scrollTop - pinnedTop) > 1) {
+            withSuppressedScroll(function () {
+              el.scrollTop = pinnedTop;
+            });
+          }
+        }
+
+        function startPinLoop() {
+          if (pinRaf) return;
+          function tick() {
+            pinRaf = null;
+            if (mode !== 'READING_HISTORY') return;
+            restorePinned();
+            pinRaf = win.requestAnimationFrame(tick);
+          }
+          pinRaf = win.requestAnimationFrame(tick);
+        }
+
+        function stopPinLoop() {
+          if (pinRaf) {
+            win.cancelAnimationFrame(pinRaf);
+            pinRaf = null;
+          }
+        }
+
+        function markScrollingUp() {
+          userScrollingUp = true;
+          userIntentDown = false;
+          if (userIntentDownTimer) { clearTimeout(userIntentDownTimer); userIntentDownTimer = null; }
+          if (userScrollUpTimer) clearTimeout(userScrollUpTimer);
+          userScrollUpTimer = setTimeout(function () { userScrollingUp = false; }, 320);
+        }
+
+        function markUserDown() {
+          userIntentDown = true;
+          userScrollingUp = false;
+          if (userScrollUpTimer) { clearTimeout(userScrollUpTimer); userScrollUpTimer = null; }
+          if (userIntentDownTimer) clearTimeout(userIntentDownTimer);
+          userIntentDownTimer = setTimeout(function () { userIntentDown = false; }, 450);
+        }
+
+        function pauseFollowForReading() {
+          const el = getScrollEl();
+          if (!el) return;
+          pinnedTop = el.scrollTop;
+          setMode('READING_HISTORY');
+        }
+
+        function onPointerDown() {
+          pointerActive = true;
+        }
+
+        function onPointerUp() {
+          const wasActive = pointerActive;
+          pointerActive = false;
+          if (!wasActive) return;
+          const el = getScrollEl();
+          if (!el) return;
+          // Fin de drag scrollbar / trackpad press : bas atteint → reprendre le suivi
+          if (nearBottom(el) && mode !== 'RETURNING_BOTTOM') {
+            markUserDown();
+            setMode('FOLLOWING_BOTTOM');
+          }
+        }
+
+        function onKeyDown(ev) {
+          if (!ev) return;
+          const downKeys = { PageDown: 1, End: 1, ArrowDown: 1, ' ': 1 };
+          const upKeys = { PageUp: 1, Home: 1, ArrowUp: 1 };
+          if (downKeys[ev.key]) markUserDown();
+          if (upKeys[ev.key]) {
+            markScrollingUp();
+            if (mode === 'FOLLOWING_BOTTOM') pauseFollowForReading();
+          }
+        }
+
+        function onUserScroll() {
+          if (suppressScrollEvent) return;
+          const el = getScrollEl();
+          if (!el) return;
+
+          if (mode === 'RETURNING_BOTTOM') {
+            if (nearBottom(el)) {
+              if (returnTimer) { clearInterval(returnTimer); returnTimer = null; }
+              userScrollingUp = false;
+              userIntentDown = true;
+              setMode('FOLLOWING_BOTTOM');
+            }
+            return;
+          }
+
+          if (nearBottom(el)) {
+            // Reprendre le suivi seulement sur geste utilisateur (wheel/touch/pointer/keys),
+            // jamais sur un scrollTop forcé par Streamlit pendant READING_HISTORY.
+            if (mode === 'FOLLOWING_BOTTOM' || userIntentDown || pointerActive) {
+              userScrollingUp = false;
+              setMode('FOLLOWING_BOTTOM');
+              return;
+            }
+            restorePinned();
+            return;
+          }
+
+          pinnedTop = el.scrollTop;
+          setMode('READING_HISTORY');
+        }
+
+        function onWheel(ev) {
+          if (mode === 'RETURNING_BOTTOM') return;
+          if (ev.deltaY < 0) {
+            markScrollingUp();
+            if (mode === 'FOLLOWING_BOTTOM') pauseFollowForReading();
+          } else if (ev.deltaY > 0) {
+            markUserDown();
+          }
+        }
+
+        function onTouchStart(ev) {
+          if (!ev.touches || !ev.touches.length) return;
+          touchStartY = ev.touches[0].clientY;
+        }
+
+        function onTouchMove(ev) {
+          if (touchStartY == null || !ev.touches || !ev.touches.length) return;
+          const dy = ev.touches[0].clientY - touchStartY;
+          // Doigt vers le bas = contenu vers le haut (lecture historique)
+          if (dy > 8) {
+            markScrollingUp();
+            if (mode === 'FOLLOWING_BOTTOM') pauseFollowForReading();
+          } else if (dy < -8) {
+            markUserDown();
+          }
+        }
+
+        function onContentGrowth() {
+          const el = getScrollEl();
+          if (!el) return;
+          const grew = el.scrollHeight !== lastScrollHeight;
+          lastScrollHeight = el.scrollHeight;
+          if (mode === 'FOLLOWING_BOTTOM') {
+            if (userScrollingUp) {
+              pauseFollowForReading();
+              return;
+            }
+            stickToBottom(false);
+          } else if (mode === 'READING_HISTORY') {
+            restorePinned();
+            if (grew) syncButton();
+          } else if (mode === 'RETURNING_BOTTOM' && grew) {
+            stickToBottom(false);
+          }
+        }
+
+        function scheduleGrowthCheck() {
+          if (rafPending) return;
+          rafPending = true;
+          requestAnimationFrame(function () {
+            rafPending = false;
+            onContentGrowth();
+          });
+        }
+
+        function returnToBottom() {
+          const el = getScrollEl();
+          if (!el) return;
+          userIntentDown = true;
+          userScrollingUp = false;
+          setMode('RETURNING_BOTTOM');
+          stickToBottom(true);
+          if (returnTimer) clearInterval(returnTimer);
+          let tries = 0;
+          returnTimer = setInterval(function () {
+            tries += 1;
+            stickToBottom(false);
+            if (nearBottom(el) || tries > 24) {
+              clearInterval(returnTimer);
+              returnTimer = null;
+              setMode('FOLLOWING_BOTTOM');
+              stickToBottom(false);
+            }
+          }, 40);
+        }
+
+        function unbindScrollEl(el) {
+          if (!el) return;
+          el.removeEventListener('scroll', onUserScroll);
+          el.removeEventListener('wheel', onWheel);
+          el.removeEventListener('touchstart', onTouchStart);
+          el.removeEventListener('touchmove', onTouchMove);
+          el.removeEventListener('pointerdown', onPointerDown);
+          el.removeEventListener('keydown', onKeyDown);
+        }
+
+        function bindScrollEl() {
+          const el = getScrollEl();
+          if (!el) return null;
+          if (scrollEl && scrollEl !== el) unbindScrollEl(scrollEl);
+          if (el !== scrollEl) {
+            el.addEventListener('scroll', onUserScroll, { passive: true });
+            el.addEventListener('wheel', onWheel, { passive: true });
+            el.addEventListener('touchstart', onTouchStart, { passive: true });
+            el.addEventListener('touchmove', onTouchMove, { passive: true });
+            el.addEventListener('pointerdown', onPointerDown, { passive: true });
+            el.addEventListener('keydown', onKeyDown, { passive: true });
+            if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+            scrollEl = el;
+            lastScrollHeight = el.scrollHeight;
+          }
+          return el;
+        }
+
+        // CRITIQUE : patcher Element du PARENT (pas celui de l'iframe components.html)
+        const ParentElement = win.Element;
+        if (ParentElement && !ParentElement.prototype._assistScrollIntoViewPatchedV10) {
+          const orig = ParentElement.prototype.scrollIntoView;
+          ParentElement.prototype._assistScrollIntoViewOrig = orig;
+          ParentElement.prototype.scrollIntoView = function () {
+            const state = win._assistSmartScroll;
+            if (state && state.getMode && state.getMode() === 'READING_HISTORY') {
+              const main = doc.querySelector('[data-testid="stMain"]');
+              if (main && (this === main || main.contains(this))) return;
+            }
+            return orig.apply(this, arguments);
+          };
+          ParentElement.prototype._assistScrollIntoViewPatchedV10 = true;
+        }
+
+        // Neutralise le helper Streamlit s'il est exposé
+        if (typeof win.scrollElementIntoContainer === 'function' && !win._assistScrollHelperPatched) {
+          const origHelper = win.scrollElementIntoContainer;
+          win.scrollElementIntoContainer = function () {
+            const state = win._assistSmartScroll;
+            if (state && state.getMode && state.getMode() === 'READING_HISTORY') return;
+            return origHelper.apply(this, arguments);
+          };
+          win._assistScrollHelperPatched = true;
+        }
+
+        const mo = new MutationObserver(scheduleGrowthCheck);
+        const ro = new ResizeObserver(scheduleGrowthCheck);
+
+        function observe() {
+          const el = bindScrollEl();
+          if (!el) return;
+          // Pas de characterData : trop coûteux pendant le streaming token-par-token
+          try { mo.observe(el, { childList: true, subtree: true }); } catch (e) {}
+          try { ro.observe(el); } catch (e) {}
+          if (mode === 'RETURNING_BOTTOM') {
+            positionButton();
+            return;
+          }
+          if (mode === 'READING_HISTORY') {
+            restorePinned();
+            syncButton();
+            return;
+          }
+          // FOLLOWING_BOTTOM
+          if (nearBottom(el)) stickToBottom(false);
+          else {
+            pinnedTop = el.scrollTop;
+            setMode('READING_HISTORY');
+          }
+          syncButton();
+        }
+
+        function refresh() {
+          observe();
+          scheduleGrowthCheck();
+        }
+
+        function destroy() {
+          if (returnTimer) { clearInterval(returnTimer); returnTimer = null; }
+          if (userScrollUpTimer) { clearTimeout(userScrollUpTimer); userScrollUpTimer = null; }
+          if (userIntentDownTimer) { clearTimeout(userIntentDownTimer); userIntentDownTimer = null; }
+          stopPinLoop();
+          if (scrollEl) {
+            unbindScrollEl(scrollEl);
+            scrollEl = null;
+          }
+          try { mo.disconnect(); } catch (e) {}
+          try { ro.disconnect(); } catch (e) {}
+          doc.removeEventListener('pointerup', onPointerUp);
+          doc.removeEventListener('pointercancel', onPointerUp);
+          btn.onclick = null;
+        }
+
+        btn.onclick = function (ev) {
+          if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+          returnToBottom();
+        };
+
+        function onWinResize() { positionButton(); }
+        win.addEventListener('resize', onWinResize, { passive: true });
+        doc.addEventListener('pointerup', onPointerUp, { passive: true });
+        doc.addEventListener('pointercancel', onPointerUp, { passive: true });
+
+        observe();
+        // Filet léger : rebind + sync. Le pin serré est géré par startPinLoop en READING.
+        const pollId = setInterval(function () {
+          bindScrollEl();
+          const el = getScrollEl();
+          if (!el) return;
+          if (mode === 'READING_HISTORY') {
+            restorePinned();
+            syncButton();
+          } else if (mode === 'FOLLOWING_BOTTOM') {
+            const gap = gapFromBottom(el);
+            if (gap > 8 && gap < 48 && !userScrollingUp) stickToBottom(false);
+            syncButton();
+          } else {
+            positionButton();
+          }
+        }, 400);
+
+        win._assistSmartScroll = {
+          version: SCROLL_VERSION,
+          refresh: refresh,
+          destroy: function () {
+            clearInterval(pollId);
+            win.removeEventListener('resize', onWinResize);
+            destroy();
+            win._assistSmartScroll = null;
+          },
+          getMode: function () { return mode; },
+        };
+      })();
+
+      // Composer : rendre le focus au champ à la fin d'une réponse (placeholder « Génération… »).
       // Streamlit désactive aussi le champ pendant chaque rerun : ce cas ne doit pas voler le focus.
       // Pas sur écran tactile (ouvrirait le clavier) ni sous une fenêtre modale.
       const tactile = window.parent.matchMedia && window.parent.matchMedia('(pointer: coarse)').matches;
-      let composerReflechissait = false;
-      setInterval(function () {
-        const ta = doc.querySelector('[data-testid="stChatInputTextArea"]');
+      if (!win._assistComposerFocusBound) {
+        win._assistComposerFocusBound = true;
+        let composerReflechissait = false;
+        setInterval(function () {
+          const ta = doc.querySelector('[data-testid="stChatInputTextArea"]');
+          if (!ta) return;
+          const ph = ta.placeholder || '';
+          const reflechit = ph.indexOf('Génération') === 0 || ph.indexOf('Réflexion') === 0;
+          const libre = !doc.activeElement || doc.activeElement === doc.body;
+          const modale = doc.querySelector('[role="dialog"]');
+          if (composerReflechissait && !reflechit && !ta.disabled && !tactile && libre && !modale) {
+            ta.focus();
+          }
+          if (reflechit || !ta.disabled) composerReflechissait = reflechit;
+        }, 300);
+      }
+
+      // Édition de prompt (st.form) : Entrée = Envoyer, Maj+Entrée = ligne, Échap = Annuler.
+      // Binding versionné : remplace l'ancien listener sans doublon.
+      (function installEditKeys() {
+        const EDIT_KEYS_VERSION = 4;
+        if (doc._assistEditKeysVersion === EDIT_KEYS_VERSION && doc._assistEditKeysHandler) return;
+        if (doc._assistEditKeysHandler) {
+          try { doc.removeEventListener('keydown', doc._assistEditKeysHandler, true); } catch (err) {}
+        }
+        if (doc._assistEditClickHandler) {
+          try { doc.removeEventListener('pointerdown', doc._assistEditClickHandler, true); } catch (err) {}
+        }
+        function editBox() {
+          return doc.querySelector('[class*="st-key-edit_box_"]');
+        }
+        function masquerEditImmediat(box) {
+          // Perception instantanée : masque avant le round-trip Streamlit
+          if (!box) return;
+          try {
+            box.style.display = 'none';
+            box.style.visibility = 'hidden';
+            box.style.pointerEvents = 'none';
+          } catch (err) {}
+        }
+        function boutonForm(box, primary) {
+          const testid = primary
+            ? 'stBaseButton-primaryFormSubmit'
+            : 'stBaseButton-secondaryFormSubmit';
+          return box.querySelector('[data-testid="' + testid + '"]')
+            || box.querySelector('button[kind="' + (primary ? 'primaryFormSubmit' : 'secondaryFormSubmit') + '"]');
+        }
+        function dansEditBox(el) {
+          return !!(el && el.closest && el.closest('[class*="st-key-edit_box_"]'));
+        }
+        function onEditKeys(ev) {
+          const box = editBox();
+          if (!box) return;
+          const ta = box.querySelector('textarea');
+          if (!ta) return;
+          // Échap : annule dès que l'éditeur est ouvert (focus non requis sur le textarea)
+          if (ev.key === 'Escape') {
+            ev.preventDefault();
+            try { ta.blur(); } catch (err) {}
+            masquerEditImmediat(box);
+            const btn = boutonForm(box, false);
+            if (btn && !btn.disabled) btn.click();
+            return;
+          }
+          const cible = ev.target;
+          const focusEdit = cible === ta || dansEditBox(cible) || doc.activeElement === ta;
+          if (!focusEdit) return;
+          if (ev.key === 'Enter' && !ev.shiftKey && !ev.altKey && !ev.ctrlKey && !ev.metaKey) {
+            if (cible !== ta && !(cible && cible.tagName === 'TEXTAREA')) return;
+            ev.preventDefault();
+            try { ta.blur(); } catch (err) {}
+            const btn = boutonForm(box, true);
+            if (btn && !btn.disabled) {
+              // Masquer dès Envoyer pour fluidité (le contenu part déjà via le form)
+              masquerEditImmediat(box);
+              btn.click();
+            }
+          }
+        }
+        // Annuler / Envoyer : masquage immédiat au pointerdown (avant le rerun Streamlit)
+        function onEditPointer(ev) {
+          const t = ev.target;
+          if (!t || !t.closest) return;
+          const box = t.closest('[class*="st-key-edit_box_"]');
+          if (!box) return;
+          const btn = t.closest('button');
+          if (!btn) return;
+          const kind = btn.getAttribute('kind') || '';
+          const testid = btn.getAttribute('data-testid') || '';
+          const isSubmit = kind.indexOf('FormSubmit') >= 0 || testid.indexOf('FormSubmit') >= 0;
+          if (isSubmit) masquerEditImmediat(box);
+        }
+        doc._assistEditKeysHandler = onEditKeys;
+        doc._assistEditClickHandler = onEditPointer;
+        doc._assistEditKeysVersion = EDIT_KEYS_VERSION;
+        doc._assistEditKeysBound = true;
+        doc.addEventListener('keydown', onEditKeys, true);
+        doc.addEventListener('pointerdown', onEditPointer, true);
+      })();
+      // Focus auto + hauteur adaptive du textarea d'édition
+      (function () {
+        const box = doc.querySelector('[class*="st-key-edit_box_"]');
+        if (!box) return;
+        const ta = box.querySelector('textarea');
         if (!ta) return;
-        const reflechit = (ta.placeholder || '').indexOf('Réflexion') === 0;
-        const libre = !doc.activeElement || doc.activeElement === doc.body;
-        const modale = doc.querySelector('[role="dialog"]');
-        if (composerReflechissait && !reflechit && !ta.disabled && !tactile && libre && !modale) {
+        function fitEditHeight() {
+          const minH = 68;
+          const maxH = 320;
+          ta.style.height = 'auto';
+          const next = Math.min(maxH, Math.max(minH, ta.scrollHeight));
+          ta.style.height = next + 'px';
+        }
+        if (!ta._assistAutoResize) {
+          ta.addEventListener('input', fitEditHeight);
+          ta._assistAutoResize = true;
+        }
+        fitEditHeight();
+        if (!box._assistFocused && !tactile) {
           ta.focus();
+          try {
+            const n = ta.value.length;
+            ta.setSelectionRange(n, n);
+          } catch (err) {}
+          box._assistFocused = true;
         }
-        if (reflechit || !ta.disabled) composerReflechissait = reflechit;
-      }, 300);
+      })();
 
-      // Fenêtre modale : focus sur le premier champ de saisie à l'ouverture et à chaque
-      // changement d'étape (sinon Streamlit le place sur le 1er bouton, ex. « Google »).
-      let champModaleVu = null;
-      setInterval(function () {
-        const champ = doc.querySelector(
-          '[role="dialog"] input:not([type="hidden"]):not([disabled]), [role="dialog"] textarea:not([disabled])'
-        );
-        if (champ && champ !== champModaleVu) {
-          const dansModale = doc.activeElement && doc.activeElement.closest('[role="dialog"]');
-          const surChamp = dansModale && /^(INPUT|TEXTAREA)$/.test(doc.activeElement.tagName);
-          if (!surChamp) champ.focus();
-        }
-        champModaleVu = champ;
-      }, 250);
+      // Fenêtre modale : focus — singleton (évite un setInterval par rerun Streamlit)
+      if (!win._assistModalFocusBound) {
+        win._assistModalFocusBound = true;
+        let champModaleVu = null;
+        setInterval(function () {
+          const champ = doc.querySelector(
+            '[role="dialog"] input:not([type="hidden"]):not([disabled]), [role="dialog"] textarea:not([disabled])'
+          );
+          if (champ && champ !== champModaleVu) {
+            const dansModale = doc.activeElement && doc.activeElement.closest('[role="dialog"]');
+            const surChamp = dansModale && /^(INPUT|TEXTAREA)$/.test(doc.activeElement.tagName);
+            if (!surChamp) champ.focus();
+          }
+          champModaleVu = champ;
+        }, 400);
+      }
 
-      // Noms accessibles des boutons à icône seule (sinon lus « thumb_up », « ⋯ »)
-      const NOMS = [
-        ['[class*="st-key-fb_up_"] button', 'Réponse utile'],
-        ['[class*="st-key-fb_dn_"] button', 'Réponse pas utile'],
-        ['section[data-testid="stSidebar"] [data-testid="stPopoverButton"]', 'Actions de la discussion'],
-      ];
-      setInterval(function () {
-        NOMS.forEach(function (n) {
-          doc.querySelectorAll(n[0]).forEach(function (b) {
-            if (!b.getAttribute('aria-label')) b.setAttribute('aria-label', n[1]);
+      // Noms accessibles — singleton (évite la fuite d'intervalles à chaque remount)
+      if (!win._assistAriaLabelsBound) {
+        win._assistAriaLabelsBound = true;
+        const NOMS = [
+          ['[class*="st-key-fb_up_"] button', 'Réponse utile'],
+          ['[class*="st-key-fb_dn_"] button', 'Réponse pas utile'],
+          ['[class*="st-key-edit_btn_"] button', 'Modifier'],
+          ['section[data-testid="stSidebar"] [data-testid="stPopoverButton"]', 'Actions de la discussion'],
+        ];
+        setInterval(function () {
+          NOMS.forEach(function (n) {
+            doc.querySelectorAll(n[0]).forEach(function (b) {
+              if (!b.getAttribute('aria-label')) b.setAttribute('aria-label', n[1]);
+            });
           });
-        });
-        doc.querySelectorAll('[data-testid="stFileChipDeleteBtn"] button[aria-label^="Remove "]').forEach(function (b) {
-          b.setAttribute('aria-label', 'Retirer ' + b.getAttribute('aria-label').slice(7));
-          b.title = b.getAttribute('aria-label');
-        });
-      }, 1000);
+          doc.querySelectorAll('[data-testid="stFileChipDeleteBtn"] button[aria-label^="Remove "]').forEach(function (b) {
+            b.setAttribute('aria-label', 'Retirer ' + b.getAttribute('aria-label').slice(7));
+            b.title = b.getAttribute('aria-label');
+          });
+        }, 1500);
+      }
 
       // Menu « + » du composer : exécuté dans la page parente (caméra/micro y sont autorisés)
       function assistPlusMenu() {
@@ -1241,25 +1917,45 @@ components.html(
         doc.head.appendChild(s);
       }
 
-      // Pont toolbar (edit/feedback) : le sandbox bloque location.href depuis l'iframe
-      if (!window.parent._assistToolbarBound) {
-        window.parent.addEventListener('message', function (e) {
-          try {
-            const d = e.data;
-            if (!d || d.source !== 'assistdoc-toolbar') return;
-            const url = new URL(window.parent.location.href);
-            if (d.action === 'edit') {
-              url.searchParams.set('edit_msg', String(d.idx));
-            } else if (d.action === 'fb') {
+      // Pont toolbar v5 : plus de location.assign pour Edit (géré en bouton Streamlit).
+      // Conservé uniquement pour d'éventuels messages fb legacy — sans navigation lourde.
+      const BRIDGE_ID = 'assist-toolbar-bridge-v5';
+      if (!doc.getElementById(BRIDGE_ID)) {
+        const prev = doc.querySelectorAll('script[id^="assist-toolbar-bridge"]');
+        prev.forEach(function (n) { n.remove(); });
+        if (window.parent._assistToolbarHandler) {
+          try { window.parent.removeEventListener('message', window.parent._assistToolbarHandler); } catch (err) {}
+          window.parent._assistToolbarHandler = null;
+        }
+        const s = doc.createElement('script');
+        s.id = BRIDGE_ID;
+        s.textContent = '(' + function () {
+          const VERSION = 'v5';
+          if (window._assistToolbarBridgeVersion === VERSION && window._assistToolbarHandler) return;
+          if (window._assistToolbarHandler) {
+            try { window.removeEventListener('message', window._assistToolbarHandler); } catch (err) {}
+          }
+          function onToolbarMessage(e) {
+            try {
+              const d = e && e.data;
+              if (!d || d.source !== 'assistdoc-toolbar') return;
+              // Edit : ignoré ici (bouton Streamlit → session_state + rerun, sans reload).
+              if (d.action === 'edit') return;
+              if (d.action !== 'fb') return;
+              // Feedback legacy uniquement : query params sans assign si déjà présents
+              const url = new URL(window.location.href);
               url.searchParams.set('fb', String(d.note));
               url.searchParams.set('fb_idx', String(d.idx));
-            } else {
-              return;
-            }
-            window.parent.location.href = url.toString();
-          } catch (err) {}
-        });
-        window.parent._assistToolbarBound = true;
+              window.history.replaceState({}, '', url.toString());
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            } catch (err) {}
+          }
+          window._assistToolbarHandler = onToolbarMessage;
+          window._assistToolbarBridgeVersion = VERSION;
+          window._assistToolbarBound = true;
+          window.addEventListener('message', onToolbarMessage);
+        }.toString() + ')();';
+        doc.head.appendChild(s);
       }
     })();
     </script>
@@ -1538,20 +2234,47 @@ def afficher_dialog_suppression_si_besoin() -> None:
 
 
 def modifier_message(idx: int, nouveau_contenu: str) -> bool:
+    """Met à jour le texte d'un message sans relancer la génération."""
     if _discussion_figee():
         return False
-    if idx < 0 or idx >= len(st.session_state.messages):
+    maj = appliquer_edition_contenu(st.session_state.messages, idx, nouveau_contenu)
+    if maj is None:
         return False
-    contenu = (nouveau_contenu or "").strip()
-    if not contenu:
+    st.session_state.messages = maj
+    st.session_state.historique_llm = resync_historique_llm(maj)
+    sync_discussion()
+    return True
+
+
+def modifier_prompt_et_regenerer(idx: int, nouveau_contenu: str) -> bool:
+    """Édite un message utilisateur (style ChatGPT) : tronque la suite et relance l'IA.
+
+    Conserve les messages précédents, remplace le prompt, supprime les réponses
+    devenues obsolètes (branche après idx), puis démarre une nouvelle génération.
+    """
+    if not edition_autorisee(st.session_state, figee=_discussion_figee()):
         return False
-    st.session_state.messages[idx]["content"] = contenu
-    # Resync historique LLM
-    st.session_state.historique_llm = [
-        {"role": m["role"], "content": m["content"]}
-        for m in st.session_state.messages
-        if m.get("role") in ("user", "assistant")
-    ]
+    role_origine = (st.session_state.messages[idx] or {}).get("role")
+    resultat = appliquer_edition_prompt(st.session_state.messages, idx, nouveau_contenu)
+    if resultat is None:
+        return False
+    messages, historique = resultat
+    # Édition d'un message assistant : mise à jour simple, pas de régénération
+    if role_origine != "user":
+        st.session_state.messages = messages
+        st.session_state.historique_llm = historique
+        sync_discussion()
+        return True
+
+    # Tour déjà affiché : ne pas redébiter le quota invité sur une régénération Edit
+    if 0 <= idx < len(messages) and messages[idx].get("role") == "user":
+        messages[idx]["quota_decompte"] = True
+
+    st.session_state.messages = messages
+    st.session_state.historique_llm = historique
+    st.session_state.edit_msg_idx = None
+    st.session_state.en_cours = True
+    st.session_state.input_key += 1
     sync_discussion()
     return True
 
@@ -1814,6 +2537,9 @@ def afficher_sources(docs: list, msg_idx: int = 0):
 
 @st.cache_resource(show_spinner=False)
 def charger():
+    # Import lourd différé : permet d'afficher l'UI « Initialisation… » avant torch/ST
+    from core.orchestrateur import OrchestrateurAssistant
+
     orchestrateur = OrchestrateurAssistant()
     return orchestrateur.retrieval, orchestrateur, orchestrateur
 
@@ -1913,6 +2639,43 @@ def _enregistrer_feedback_msg(msg_idx: int, note: int, commentaire: str = "") ->
     return True
 
 
+def _cle_widget_edition(role: str, msg_idx: int) -> str:
+    return f"inline_edit_{role}_{msg_idx}"
+
+
+def _ouvrir_edition_message(idx: int) -> bool:
+    """Active le mode EDITING et précharge le texte dans session_state (pas via value=)."""
+    msgs = st.session_state.get("messages") or []
+    if idx < 0 or idx >= len(msgs):
+        return False
+    if _discussion_figee() or st.session_state.get("en_cours"):
+        return False
+    msg = msgs[idx]
+    role = msg.get("role") or "user"
+    if role != "user":
+        # Édition assistant : correction locale uniquement
+        pass
+    cle = _cle_widget_edition(role, idx)
+    st.session_state[cle] = msg.get("content") or ""
+    st.session_state.edit_msg_idx = idx
+    st.session_state["edit_draft_backup"] = msg.get("content") or ""
+    return True
+
+
+def _fermer_edition_message(*, restaurer: bool = False) -> None:
+    idx = st.session_state.get("edit_msg_idx")
+    msgs = st.session_state.get("messages") or []
+    role = "user"
+    if isinstance(idx, int) and 0 <= idx < len(msgs):
+        role = msgs[idx].get("role") or "user"
+        _vider_widget_edition(role, idx)
+    st.session_state.edit_msg_idx = None
+    st.session_state.pop("edit_draft_backup", None)
+    if restaurer:
+        # Le texte original reste dans messages[] ; le widget est vidé.
+        pass
+
+
 def _traiter_actions_url() -> None:
     """Lit ?edit_msg= / ?fb= envoyés par la toolbar HTML (postMessage)."""
     try:
@@ -1926,9 +2689,9 @@ def _traiter_actions_url() -> None:
             idx = int(raw if not isinstance(raw, list) else raw[0])
             if 0 <= idx < len(st.session_state.get("messages") or []):
                 if st.session_state.get("edit_msg_idx") == idx:
-                    st.session_state.edit_msg_idx = None
+                    _fermer_edition_message()
                 else:
-                    st.session_state.edit_msg_idx = idx
+                    _ouvrir_edition_message(idx)
                 changed = True
         except (TypeError, ValueError):
             pass
@@ -1942,8 +2705,11 @@ def _traiter_actions_url() -> None:
             idx_raw = qp.get("fb_idx")
             note = int(note_raw if not isinstance(note_raw, list) else note_raw[0])
             idx = int(idx_raw if not isinstance(idx_raw, list) else idx_raw[0])
-            if _enregistrer_feedback_msg(idx, note):
-                notifier("Merci, votre avis a été enregistré.")
+            if note < 0:
+                st.session_state["feedback_neg_idx"] = idx
+                changed = True
+            elif _enregistrer_feedback_msg(idx, note):
+                notifier("Merci pour votre retour positif.")
                 changed = True
         except Exception:
             pass
@@ -1957,7 +2723,7 @@ def _traiter_actions_url() -> None:
 
 
 def _afficher_actions_message(msg_idx: int, contenu: str, role: str) -> None:
-    """Toolbar Claude : SVG identiques (copier / modifier / feedback)."""
+    """Toolbar : Copier (HTML) + Modifier (Streamlit, sans reload) + Feedback."""
     import json as _json
 
     figee = _discussion_figee()
@@ -1966,41 +2732,44 @@ def _afficher_actions_message(msg_idx: int, contenu: str, role: str) -> None:
     safe = f"{role}_{msg_idx}_{st.session_state.input_key}"
     safe = "".join(ch if ch.isalnum() or ch in "_-" else "_" for ch in safe)
     align = "flex-end" if role == "user" else "flex-start"
+    edit_bloque = figee or bool(st.session_state.get("en_cours"))
 
     ico_copy = (
         '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>'
         '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
     )
-    ico_edit = (
-        '<svg viewBox="0 0 24 24"><path d="M12 20h9"/>'
-        '<path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>'
-    )
-    ico_close = (
-        '<svg viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>'
-    )
     ico_ok = '<svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>'
 
-    edit_svg = ico_close if en_edition else ico_edit
-    edit_title = "Fermer" if en_edition else "Modifier"
-    dis_attr = "disabled" if figee else ""
-
-    # Copier / éditer en HTML ; 👍/👎 en boutons Streamlit (fiable → Admin)
-    rangee = st.container(
-        horizontal=True,
-        gap=None,
-        vertical_alignment="center",
-        horizontal_alignment="right" if role == "user" else "left",
-        key=f"tbrow_{safe}",
-    )
-    with rangee:
-        _toolbar_html(safe, align, ico_copy, edit_svg, edit_title, dis_attr, ico_ok, js_texte, figee, msg_idx)
-        if role == "assistant":
-            _boutons_feedback(msg_idx, safe)
+    # En édition : pas de barre (Annuler / Envoyer suffisent).
+    if not en_edition:
+        rangee = st.container(
+            horizontal=True,
+            gap=None,
+            vertical_alignment="center",
+            horizontal_alignment="right" if role == "user" else "left",
+            key=f"tbrow_{safe}",
+        )
+        with rangee:
+            _toolbar_copie_html(safe, align, ico_copy, ico_ok, js_texte)
+            if role == "user":
+                if st.button(
+                    "",
+                    icon=":material/edit:",
+                    key=f"edit_btn_{safe}",
+                    help="Modifier",
+                    type="tertiary",
+                    disabled=edit_bloque,
+                ):
+                    if _ouvrir_edition_message(msg_idx):
+                        st.rerun()
+            if role == "assistant":
+                _boutons_feedback(msg_idx, safe)
 
     _edition_inline(msg_idx, contenu, role, en_edition, figee)
 
 
-def _toolbar_html(safe, align, ico_copy, edit_svg, edit_title, dis_attr, ico_ok, js_texte, figee, msg_idx) -> None:
+def _toolbar_copie_html(safe, align, ico_copy, ico_ok, js_texte) -> None:
+    """Bouton Copier seul (iframe) — Edit est un bouton Streamlit pour éviter le reload."""
     components.html(
         f"""
         <style>
@@ -2017,7 +2786,8 @@ def _toolbar_html(safe, align, ico_copy, edit_svg, edit_title, dis_attr, ico_ok,
             margin: 0;
             padding: 0;
             height: 28px;
-            width: 100%;
+            width: fit-content;
+            max-width: 100%;
           }}
           .tb-{safe} .tb-btn {{
             width: 28px; height: 28px;
@@ -2034,9 +2804,6 @@ def _toolbar_html(safe, align, ico_copy, edit_svg, edit_title, dis_attr, ico_ok,
             background: rgba(255,255,255,0.08);
             color: #f5f4ef;
           }}
-          .tb-{safe} .tb-btn:disabled {{
-            opacity: 0.35; cursor: not-allowed;
-          }}
           .tb-{safe} .tb-btn svg {{
             width: 15px; height: 15px;
             stroke: currentColor; fill: none;
@@ -2047,22 +2814,12 @@ def _toolbar_html(safe, align, ico_copy, edit_svg, edit_title, dis_attr, ico_ok,
         </style>
         <div class="tb-{safe}">
           <button class="tb-btn" id="cpy_{safe}" title="Copier" type="button">{ico_copy}</button>
-          <button class="tb-btn" id="edt_{safe}" title="{edit_title}" type="button" {dis_attr}>{edit_svg}</button>
         </div>
         <script>
         (function() {{
           const cpy = document.getElementById("cpy_{safe}");
-          const edt = document.getElementById("edt_{safe}");
           const okIcon = `{ico_ok}`;
           const copyIcon = `{ico_copy}`;
-          const figee = {str(figee).lower()};
-
-          function send(payload) {{
-            try {{
-              window.parent.postMessage(Object.assign({{ source: "assistdoc-toolbar" }}, payload), "*");
-            }} catch (e) {{}}
-          }}
-
           if (cpy) {{
             cpy.onclick = async function() {{
               try {{
@@ -2078,13 +2835,10 @@ def _toolbar_html(safe, align, ico_copy, edit_svg, edit_title, dis_attr, ico_ok,
               }}
             }};
           }}
-          if (edt && !figee) {{
-            edt.onclick = function() {{ send({{ action: "edit", idx: {msg_idx} }}); }};
-          }}
         }})();
         </script>
         """,
-        width=60,
+        width=32,
         height=30,
     )
 
@@ -2095,55 +2849,162 @@ def _boutons_feedback(msg_idx: int, safe: str) -> None:
         deja = list(deja)
         st.session_state.feedback_envoye = deja
     fb_key = f"{st.session_state.conversation_id}:{msg_idx}"
-    for note, icone, aide, cle in (
-        (1, ":material/thumb_up:", "Utile — visible dans Admin", f"fb_up_{safe}"),
-        (-1, ":material/thumb_down:", "Pas utile — visible dans Admin", f"fb_dn_{safe}"),
+    disabled = fb_key in deja
+    if st.button(
+        "",
+        icon=":material/thumb_up:",
+        key=f"fb_up_{safe}",
+        help="Utile — visible dans Admin",
+        type="tertiary",
+        disabled=disabled,
     ):
-        if st.button(
-            "",
-            icon=icone,
-            key=cle,
-            help=aide,
-            type="tertiary",
-            disabled=fb_key in deja,
-        ):
-            if _enregistrer_feedback_msg(msg_idx, note):
-                deja.append(fb_key)
-                notifier("Merci, votre avis a été enregistré.")
+        if _enregistrer_feedback_msg(msg_idx, 1):
+            deja.append(fb_key)
+            notifier("Merci pour votre retour positif.")
+            st.rerun()
+        else:
+            notifier("Votre avis n'a pas pu être enregistré.", "erreur")
+            st.rerun()
+    if st.button(
+        "",
+        icon=":material/thumb_down:",
+        key=f"fb_dn_{safe}",
+        help="Pas utile — précisez le problème",
+        type="tertiary",
+        disabled=disabled,
+    ):
+        st.session_state["feedback_neg_idx"] = msg_idx
+        st.rerun()
+
+
+def _fermer_dialog_feedback_neg() -> None:
+    st.session_state.pop("feedback_neg_idx", None)
+
+
+@st.dialog("Qu’est-ce qui n’a pas convenu ?", width="small", on_dismiss=_fermer_dialog_feedback_neg)
+def _dialog_feedback_negatif() -> None:
+    idx = st.session_state.get("feedback_neg_idx")
+    if not isinstance(idx, int):
+        st.session_state.pop("feedback_neg_idx", None)
+        st.rerun()
+        return
+    st.caption("Votre retour aide à améliorer AssistDoc. Le détail reste visible côté administration.")
+    commentaire = st.text_area(
+        "Précisez le problème (optionnel)",
+        key=f"fb_neg_comment_{idx}",
+        height=100,
+        placeholder="Ex. : réponse incomplète, mauvaise source, hors sujet…",
+    )
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Annuler", key=f"fb_neg_cancel_{idx}", use_container_width=True):
+            _fermer_dialog_feedback_neg()
+            st.rerun()
+    with c2:
+        if st.button("Envoyer", key=f"fb_neg_ok_{idx}", type="primary", use_container_width=True):
+            deja = st.session_state.setdefault("feedback_envoye", [])
+            fb_key = f"{st.session_state.conversation_id}:{idx}"
+            if _enregistrer_feedback_msg(idx, -1, (commentaire or "").strip()):
+                if fb_key not in deja:
+                    deja.append(fb_key)
+                _fermer_dialog_feedback_neg()
+                notifier("Merci, votre retour a été enregistré.")
                 st.rerun()
             else:
-                st.toast("Votre avis n'a pas pu être enregistré.", icon=":material/error:")
+                notifier("Votre avis n'a pas pu être enregistré.", "erreur")
+
+
+def afficher_dialog_feedback_si_besoin() -> None:
+    if isinstance(st.session_state.get("feedback_neg_idx"), int):
+        _dialog_feedback_negatif()
+
+
+def _vider_widget_edition(role: str, msg_idx: int) -> None:
+    prefix = _cle_widget_edition(role, msg_idx)
+    for k in list(st.session_state.keys()):
+        if str(k) == prefix or str(k).startswith(prefix + "_"):
+            del st.session_state[k]
+        if str(k).startswith(f"edit_form_{role}_{msg_idx}"):
+            del st.session_state[k]
+
+
+def _lire_texte_edition(role: str, msg_idx: int) -> str:
+    """Lit la valeur réelle du widget (session_state), pas une copie obsolète."""
+    cle = _cle_widget_edition(role, msg_idx)
+    return str(st.session_state.get(cle) or "").strip()
+
+
+def _hauteur_editeur(contenu: str, *, regenerer: bool = True) -> int:
+    """Hauteur initiale proportionnelle au texte (le JS affine ensuite)."""
+    texte = contenu or ""
+    lignes = 1
+    for ligne in texte.splitlines() or [""]:
+        lignes += max(1, (len(ligne) // 52) + 1)
+    if not texte:
+        lignes = 1
+    lignes = max(1, min(lignes, 12))
+    base = 40 + lignes * 22
+    return int(min(320, max(68 if regenerer else 88, base)))
 
 
 def _edition_inline(msg_idx: int, contenu: str, role: str, en_edition: bool, figee: bool) -> None:
-    if en_edition and not figee:
-        nouveau = st.text_area(
-            "Éditer le message",
-            value=contenu,
-            height=180,
-            key=f"inline_edit_{role}_{msg_idx}",
-        )
-        s_annuler, s_ok = st.columns(2, gap="small")
-        with s_annuler:
-            if st.button(
-                "Annuler",
-                key=f"inline_cancel_{role}_{msg_idx}",
-                use_container_width=True,
-            ):
-                st.session_state.edit_msg_idx = None
-                st.rerun()
-        with s_ok:
-            enregistrer = st.button(
-                "Enregistrer",
-                key=f"inline_save_{role}_{msg_idx}",
-                type="primary",
-                use_container_width=True,
+    """Éditeur inline via st.form : text_area + boutons soumis atomiquement.
+
+    Cause racine corrigée : ne plus passer value= en parallèle de key= (réinitialise /
+    désynchronise le widget), et soumettre via form pour que Streamlit envoie
+    impérativement la dernière saisie avec le clic Envoyer / Entrée.
+    """
+    if not en_edition or figee or st.session_state.get("en_cours"):
+        return
+
+    regenerer = role == "user"
+    cle = _cle_widget_edition(role, msg_idx)
+    if cle not in st.session_state:
+        st.session_state[cle] = contenu or ""
+    hauteur = _hauteur_editeur(str(st.session_state.get(cle) or contenu or ""), regenerer=regenerer)
+
+    with st.container(key=f"edit_box_{role}_{msg_idx}"):
+        with st.form(key=f"edit_form_{role}_{msg_idx}", border=False):
+            st.text_area(
+                "Modifier le prompt" if regenerer else "Éditer le message",
+                height=hauteur,
+                key=cle,
+                label_visibility="collapsed",
+                placeholder="Modifiez votre message… Entrée pour envoyer, Maj+Entrée pour une nouvelle ligne.",
             )
-        if enregistrer:
-            if not (nouveau or "").strip():
+            s_annuler, s_ok = st.columns(2, gap="small")
+            with s_annuler:
+                annuler = st.form_submit_button(
+                    "Annuler",
+                    use_container_width=True,
+                )
+            with s_ok:
+                valider = st.form_submit_button(
+                    "Envoyer" if regenerer else "Enregistrer",
+                    type="primary",
+                    use_container_width=True,
+                )
+
+        if annuler:
+            _fermer_edition_message(restaurer=True)
+            st.rerun()
+
+        if valider:
+            texte = _lire_texte_edition(role, msg_idx)
+            if not texte:
+                # Restaurer le brouillon pour ne pas perdre la saisie à l'écran
+                if cle not in st.session_state or not str(st.session_state.get(cle) or "").strip():
+                    st.session_state[cle] = st.session_state.get("edit_draft_backup") or contenu or ""
                 afficher_erreur("Le message ne peut pas être vide.")
-            elif modifier_message(msg_idx, nouveau):
-                st.session_state.edit_msg_idx = None
+            elif regenerer:
+                if modifier_prompt_et_regenerer(msg_idx, texte):
+                    _vider_widget_edition(role, msg_idx)
+                    st.session_state.pop("edit_draft_backup", None)
+                    st.rerun()
+                else:
+                    afficher_erreur("Le prompt n'a pas pu être modifié. Réessayez.")
+            elif modifier_message(msg_idx, texte):
+                _fermer_edition_message()
                 notifier("Message mis à jour.")
                 st.rerun()
             else:
@@ -2462,6 +3323,16 @@ if not st.session_state.pret:
         st.stop()
 
 
+def _html_reflexion(label: str) -> str:
+    """Indicateur compact affiché dans le seul bloc assistant en cours."""
+    return (
+        '<div class="thinking-inline">'
+        '<div class="tdots"><span></span><span></span><span></span></div>'
+        f'<div class="tlabel">{html_lib.escape(label)}</div>'
+        "</div>"
+    )
+
+
 _traiter_actions_url()
 
 # Suggestion cliquée : démarrer tout de suite (évite le flash des chips d'accueil)
@@ -2488,10 +3359,12 @@ st.markdown("""
 """, unsafe_allow_html=True)
 afficher_dialog_auth_si_besoin()
 afficher_dialog_suppression_si_besoin()
+afficher_dialog_feedback_si_besoin()
 
 
 # ── CHAT ──────────────────────────────────────────────────────────
 col = st.columns([1, 12, 1])[1]
+zone_reponse_en_cours = None  # rempli si génération en cours (slot avant composer)
 
 with col:
     st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
@@ -2535,30 +3408,41 @@ with col:
                     st.session_state["_sug"] = sug + " ?"
                     st.rerun()
 
+    edit_actif = st.session_state.get("edit_msg_idx")
     for msg_idx, msg in enumerate(st.session_state.messages):
+        # Pendant l'édition d'un prompt : masquer la branche suivante (réponses obsolètes)
+        if (
+            isinstance(edit_actif, int)
+            and msg_idx > edit_actif
+            and not st.session_state.get("en_cours")
+        ):
+            continue
         if msg["role"] == "user":
-            # Utilisateur à droite
-            _, droite = st.columns([2, 5])
-            with droite:
-                fichiers_msg = msg.get("fichiers", [])
-                with st.chat_message("user", avatar="user"):
-                    for f in fichiers_msg or []:
-                        _afficher_piece_jointe(f)
-                    st.markdown(msg["content"])
-                _afficher_actions_message(msg_idx, msg.get("content", ""), "user")
+            fichiers_msg = msg.get("fichiers", [])
+            en_edition = (
+                edit_actif == msg_idx
+                and not _discussion_figee()
+                and not st.session_state.get("en_cours")
+            )
+            with st.container(key=f"msg_user_{msg_idx}_{st.session_state.input_key}"):
+                if en_edition:
+                    # Remplace la bulle par l'éditeur (style ChatGPT)
+                    _afficher_actions_message(msg_idx, msg.get("content", ""), "user")
+                else:
+                    with st.chat_message("user"):
+                        for f in fichiers_msg or []:
+                            _afficher_piece_jointe(f)
+                        st.markdown(msg["content"])
+                    _afficher_actions_message(msg_idx, msg.get("content", ""), "user")
         else:
-            # IA à gauche
-            gauche, _ = st.columns([5, 2])
-            with gauche:
-                docs    = msg.get("docs", [])
-                tokens  = msg.get("tokens", 0)
-                sans_sources = msg.get("sans_sources", False)
-                abstention = msg.get("abstention", False)
-                mode_msg = msg.get("mode") or ""
-                nb_web = int(msg.get("nb_sources_web") or 0)
-                score_rag_msg = msg.get("score_rag")
+            docs    = msg.get("docs", [])
+            sans_sources = msg.get("sans_sources", False)
+            abstention = msg.get("abstention", False)
+            nb_web = int(msg.get("nb_sources_web") or 0)
+            score_rag_msg = msg.get("score_rag")
 
-                with st.chat_message("assistant", avatar="assistant"):
+            with st.container(key=f"msg_assistant_{msg_idx}_{st.session_state.input_key}"):
+                with st.chat_message("assistant"):
                     st.markdown(nettoyer_reponse(msg["content"]))
                     for img in msg.get("images") or []:
                         b64 = img.get("b64")
@@ -2576,84 +3460,74 @@ with col:
                             st.caption("(image indisponible)")
                     _afficher_actions_message(msg_idx, msg.get("content", ""), "assistant")
 
-                    docs_valides = [] if sans_sources else list(docs or [])
-                    nb_sources = len(docs_valides)
-                    conf_moy = 0.0
-                    if isinstance(score_rag_msg, (int, float)) and score_rag_msg > 0:
-                        conf_moy = float(score_rag_msg)
-                    elif docs_valides:
-                        confs = [d.get("score_confiance") for d in docs_valides if isinstance(d.get("score_confiance"), (int, float))]
-                        conf_moy = sum(confs) / len(confs) if confs else 0.0
+                docs_valides = [] if sans_sources else list(docs or [])
+                nb_sources = len(docs_valides)
+                conf_moy = 0.0
+                if isinstance(score_rag_msg, (int, float)) and score_rag_msg > 0:
+                    conf_moy = float(score_rag_msg)
+                elif docs_valides:
+                    confs = [d.get("score_confiance") for d in docs_valides if isinstance(d.get("score_confiance"), (int, float))]
+                    conf_moy = sum(confs) / len(confs) if confs else 0.0
 
-                    # Tokens + confiance + décompte sources (pas de latence)
-                    meta_parts = []
-                    if tokens:
-                        meta_parts.append(f"{tokens} tokens")
-                    if mode_msg and mode_msg not in {"conversation", "abstention"}:
-                        meta_parts.append(f"mode {mode_msg}")
-                    if not sans_sources:
-                        if nb_sources:
-                            meta_parts.append(f"corpus {nb_sources}")
-                        if nb_web:
-                            meta_parts.append(f"web {nb_web}")
-                        if conf_moy:
-                            meta_parts.append(f"confiance {conf_moy:.0%}")
-                    if abstention:
-                        meta_parts.append("abstention")
-                    if meta_parts:
-                        st.caption(" · ".join(meta_parts))
+                # Métadonnées utiles uniquement (pas de tokens ni de mode modèle)
+                meta_parts = []
+                if not sans_sources:
+                    if nb_sources:
+                        meta_parts.append(f"corpus {nb_sources}")
+                    if nb_web:
+                        meta_parts.append(f"web {nb_web}")
+                    if conf_moy:
+                        meta_parts.append(f"confiance {conf_moy:.0%}")
+                if abstention:
+                    meta_parts.append("abstention")
+                if meta_parts:
+                    st.caption(" · ".join(meta_parts))
 
-                    if docs_valides:
-                        with st.expander("Sources & confiance", expanded=False):
-                            afficher_sources(docs_valides, msg_idx=msg_idx)
+                if docs_valides:
+                    with st.expander("Sources & confiance", expanded=False):
+                        afficher_sources(docs_valides, msg_idx=msg_idx)
 
-                    with st.expander("Signaler une erreur", expanded=False):
-                        motif = st.text_area(
-                            "Décrivez le problème (hallucination, mauvaise source, bug…)",
-                            key=f"signal_{msg_idx}",
-                            height=80,
-                            placeholder="Ex. : la citation ne correspond pas à la réponse…",
-                        )
-                        cle_envoye = f"signal_envoye:{st.session_state.conversation_id}:{msg_idx}"
-                        deja_signale = bool(st.session_state.get(cle_envoye))
-                        if deja_signale:
-                            st.caption("Signalement transmis à l'administrateur. Merci.")
-                        if st.button(
-                            "Envoyer le signalement",
-                            key=f"btn_signal_{msg_idx}",
-                            disabled=deja_signale,
+                with st.expander("Signaler une erreur", expanded=False):
+                    motif = st.text_area(
+                        "Décrivez le problème (hallucination, mauvaise source, bug…)",
+                        key=f"signal_{msg_idx}",
+                        height=80,
+                        placeholder="Ex. : la citation ne correspond pas à la réponse…",
+                    )
+                    cle_envoye = f"signal_envoye:{st.session_state.conversation_id}:{msg_idx}"
+                    deja_signale = bool(st.session_state.get(cle_envoye))
+                    if deja_signale:
+                        st.caption("Signalement transmis à l'administrateur. Merci.")
+                    if st.button(
+                        "Envoyer le signalement",
+                        key=f"btn_signal_{msg_idx}",
+                        disabled=deja_signale,
+                    ):
+                        texte = (motif or "").strip()
+                        if not texte:
+                            afficher_avertissement("Décrivez le problème en quelques mots.")
+                        elif _enregistrer_feedback_msg(
+                            msg_idx, -1, f"[signalement] {texte}"
                         ):
-                            texte = (motif or "").strip()
-                            if not texte:
-                                afficher_avertissement("Décrivez le problème en quelques mots.")
-                            elif _enregistrer_feedback_msg(
-                                msg_idx, -1, f"[signalement] {texte}"
-                            ):
-                                st.session_state[cle_envoye] = True
-                                notifier("Signalement envoyé. Merci.")
-                                st.rerun()
-                            else:
-                                afficher_erreur("Le signalement n'a pas pu être enregistré. Réessayez.")
+                            st.session_state[cle_envoye] = True
+                            notifier("Signalement envoyé. Merci.")
+                            st.rerun()
+                        else:
+                            afficher_erreur("Le signalement n'a pas pu être enregistré. Réessayez.")
 
-    if st.session_state.en_cours:
-        st.markdown(
-            """
-            <div class="thinking-stage">
-              <div class="thinking-stage-bg"></div>
-              <div class="thinking-stage-fg">
-                <div class="tdots"><span></span><span></span><span></span></div>
-                <div class="tlabel">Recherche et génération…</div>
-                <div class="thinking-chips">
-                  <div class="thinking-chip"></div>
-                  <div class="thinking-chip"></div>
-                  <div class="thinking-chip"></div>
-                  <div class="thinking-chip"></div>
-                </div>
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    # Emplacement unique de la réponse en cours — dans le fil, avant le composer
+    if (
+        st.session_state.en_cours
+        and st.session_state.messages
+        and st.session_state.messages[-1]["role"] == "user"
+    ):
+        with st.container(key=f"msg_assistant_pending_{st.session_state.input_key}"):
+            with st.chat_message("assistant"):
+                zone_reponse_en_cours = st.empty()
+                zone_reponse_en_cours.markdown(
+                    _html_reflexion("Réflexion en cours…"),
+                    unsafe_allow_html=True,
+                )
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -2744,7 +3618,7 @@ with col:
                 st.rerun()
 
     saisie = st.chat_input(
-        "Réflexion en cours…" if st.session_state.en_cours else "Poser une question…",
+        "Génération en cours…" if st.session_state.en_cours else "Poser une question…",
         key=f"composer_{st.session_state.input_key}",
         accept_file="multiple" if connecte else False,
         # Les formats refusés restent sélectionnables : traiter_fichier() explique le refus au lieu d'un rejet muet
@@ -2792,6 +3666,8 @@ if q_finale and not st.session_state.en_cours:
 
 
 # ── GÉNÉRATION ────────────────────────────────────────────────────
+# Un seul emplacement assistant : réflexion → stream/réponse → historique.
+# La zone (st.empty) a été créée dans le fil de messages, avant le composer.
 if st.session_state.en_cours and st.session_state.messages:
     users = [m for m in st.session_state.messages if m["role"] == "user"]
     if not users:
@@ -2819,6 +3695,17 @@ if st.session_state.en_cours and st.session_state.messages:
         )
 
     filtres = construire_filtres()
+
+    # Réutilise l'emplacement créé dans le fil (avant le composer) — pas de 2e bulle.
+    zone_reponse = zone_reponse_en_cours
+    if zone_reponse is None:
+        with col:
+            with st.container(key=f"msg_assistant_fallback_{st.session_state.input_key}"):
+                with st.chat_message("assistant"):
+                    zone_reponse = st.empty()
+
+    def _afficher_reflexion(label: str) -> None:
+        zone_reponse.markdown(_html_reflexion(label), unsafe_allow_html=True)
 
     try:
         t0 = time.time()
@@ -2874,27 +3761,32 @@ if st.session_state.en_cours and st.session_state.messages:
             else:
                 mode_force = "technique" if demande_code_explicite(q) else "texte"
 
-        _label_spin = "Réflexion…"
+        web_actif_gen = bool(st.session_state.get("web_search_actif"))
         if demande_generation_image(q):
             _label_spin = "Génération de l'image…"
         elif necessite_preparation(fichiers_contexte, q):
-            _label_spin = "Analyse des pièces jointes (images, pages numérisées, audio)…"
+            _label_spin = "Analyse des pièces jointes…"
         elif fichiers_contexte:
             _label_spin = "Lecture des documents joints…"
+        elif web_actif_gen:
+            _label_spin = "Recherche en cours…"
+        else:
+            _label_spin = "Réflexion en cours…"
 
-        with st.spinner(_label_spin):
-            resultat = st.session_state.orchestrateur.repondre(
-                question=q,
-                historique=st.session_state.historique_llm[:-1],
-                fichiers=fichiers_contexte or None,
-                filtres=filtres if (utiliser_corpus or not a_un_fichier) else None,
-                top_k=st.session_state.top_k,
-                stream=True,
-                mode_force=mode_force,
-                contexte_projet_existant=st.session_state.get("contexte_projet") or {},
-                utiliser_corpus=utiliser_corpus,
-                user_id=_owner(),
-            )
+        _afficher_reflexion(_label_spin)
+
+        resultat = st.session_state.orchestrateur.repondre(
+            question=q,
+            historique=st.session_state.historique_llm[:-1],
+            fichiers=fichiers_contexte or None,
+            filtres=filtres if (utiliser_corpus or not a_un_fichier) else None,
+            top_k=st.session_state.top_k,
+            stream=True,
+            mode_force=mode_force,
+            contexte_projet_existant=st.session_state.get("contexte_projet") or {},
+            utiliser_corpus=utiliser_corpus,
+            user_id=_owner(),
+        )
 
         if getattr(resultat, "contexte_projet", None):
             st.session_state.contexte_projet = resultat.contexte_projet
@@ -2905,6 +3797,7 @@ if st.session_state.en_cours and st.session_state.messages:
                 or "Je n'ai pas trouvé de passages suffisamment fiables dans le corpus "
                 "pour répondre avec confiance."
             )
+            zone_reponse.markdown(texte_abs)
             latence = time.time() - t0
             st.session_state.messages.append({
                 "role": "assistant", "content": texte_abs,
@@ -2920,10 +3813,7 @@ if st.session_state.en_cours and st.session_state.messages:
             flux = resultat.stream
             reponse_txt = ""
             if flux is not None:
-                gauche, _ = st.columns([5, 2])
-                with gauche:
-                    with st.chat_message("assistant", avatar="assistant"):
-                        reponse_txt = afficher_flux(flux)
+                reponse_txt = afficher_flux(flux, zone=zone_reponse)
                 # Journal après stream : contrôle qualité a posteriori, sans régénération
                 try:
                     holder = resultat.usage_holder or {}
@@ -2945,6 +3835,7 @@ if st.session_state.en_cours and st.session_state.messages:
                     pass
             else:
                 reponse_txt = nettoyer_reponse(resultat.reponse_seule or resultat.reponse or "")
+                zone_reponse.markdown(reponse_txt)
             if str(reponse_txt or "").startswith("❌ Erreur"):
                 _journal_securite("ia_erreur", "faible", str(reponse_txt)[:200])
 
@@ -2996,13 +3887,15 @@ if st.session_state.en_cours and st.session_state.messages:
             _journal_securite("ia_erreur", "faible", f"Génération interrompue : {type(e).__name__}")
         except Exception:
             pass
+        texte_err = message_erreur(
+            "Je n'ai pas pu générer de réponse cette fois-ci.",
+            e,
+            "Réessayez dans un instant ou reformulez la question.",
+        )
+        zone_reponse.markdown(texte_err)
         st.session_state.messages.append({
             "role": "assistant",
-            "content": message_erreur(
-                "Je n'ai pas pu générer de réponse cette fois-ci.",
-                e,
-                "Réessayez dans un instant ou reformulez la question.",
-            ),
+            "content": texte_err,
             "docs": [], "tokens": 0, "latence": 0, "avec_fichier": a_un_fichier,
             "sans_sources": False, "abstention": False,
         })

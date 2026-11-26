@@ -31,11 +31,24 @@ import app.auth_basique as _auth_basique
 from app import identite as _identite
 from app import ui_composants as _ui_composants
 from app import ui_theme as _ui_theme
+from app import utilisateurs_sqlite as _utilisateurs_sqlite
 
-# Évite le cache Python/Streamlit d'une ancienne version
-importlib.reload(_auth_basique)
-importlib.reload(_ui_theme)
-importlib.reload(_ui_composants)
+# Rechargement une fois par process (évite le coût à chaque rerun Streamlit Cloud).
+# ASSISTDOC_RELOAD_MODULES=1 force le reload à chaque run (dev local).
+import os as _os
+
+_force_reload = _os.environ.get("ASSISTDOC_RELOAD_MODULES", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+}
+if _force_reload or not getattr(sys, "_assistdoc_modules_ready", False):
+    importlib.reload(_utilisateurs_sqlite)
+    importlib.reload(_identite)
+    importlib.reload(_auth_basique)
+    importlib.reload(_ui_theme)
+    importlib.reload(_ui_composants)
+    sys._assistdoc_modules_ready = True  # type: ignore[attr-defined]
 
 injecter_theme = _ui_theme.injecter_theme
 afficher_notifications = _ui_composants.afficher_notifications
@@ -45,7 +58,10 @@ est_admin_session = _auth_basique.est_admin_session
 # Identité validée côté serveur (session ou cookie, sinon invité unique) avant les menus,
 # puis retour OAuth éventuel (rotation de session vers le compte).
 _auth_basique.exiger_auth()
-_identite.synchroniser_cookie()
+_auth_basique.prendre_en_compte_fenetre_oauth(_identite.synchroniser_cookie())
+if _auth_basique.est_fenetre_oauth():
+    _auth_basique.afficher_fermeture_oauth()
+    st.stop()
 
 _pages = [
     st.Page(

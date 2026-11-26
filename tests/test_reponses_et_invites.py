@@ -315,3 +315,143 @@ def test_se_connecter_avant_la_limite(appli):
     at.button(key="fermer").click().run()
     at.button(key="envoyer").click().run()  # requête suivante : pas de réouverture
     assert at.session_state["messages"][-1][0] == "ok" and not _formulaire_visible(at)
+
+
+# ── 4. Connexion Google / GitHub ────────────────────────────────────────────
+
+
+@pytest.fixture
+def oauth_configure(monkeypatch):
+    for fournisseur in ("GOOGLE", "GITHUB"):
+        monkeypatch.setenv(f"{fournisseur}_OAUTH_CLIENT_ID", f"id-{fournisseur.lower()}")
+        monkeypatch.setenv(f"{fournisseur}_OAUTH_CLIENT_SECRET", "secret")
+    monkeypatch.setenv("GOOGLE_OAUTH_REDIRECT_URI", "https://app.exemple/google")
+    monkeypatch.setenv("GITHUB_OAUTH_REDIRECT_URI", "https://app.exemple/github")
+
+
+SCRIPT_URLS_OAUTH = '''
+import streamlit as st
+from app import auth_basique as a
+from app import identite
+identite.identite_courante()
+st.session_state["g"] = a._url_oauth("google")
+st.session_state["h"] = a._url_oauth("github")
+'''
+
+
+def test_boutons_oauth_ouvrent_directement_le_fournisseur(appli, oauth_configure):
+    from urllib.parse import parse_qs, urlparse
+    from streamlit.testing.v1 import AppTest
+
+    _, jeton = appli
+    at = AppTest.from_string(SCRIPT_URLS_OAUTH, default_timeout=30)
+    at.session_state["_jeton_session"] = jeton
+    at.session_state["_jeton_provisoire"] = False
+    at.run()
+    assert not at.exception, at.exception
+    google = urlparse(at.session_state["g"])
+    github = urlparse(at.session_state["h"])
+    assert google.netloc == "accounts.google.com"
+    assert github.netloc == "github.com" and github.path == "/login/oauth/authorize"
+    gq, hq = parse_qs(google.query), parse_qs(github.query)
+    assert gq["redirect_uri"] == ["https://app.exemple/google"]
+    assert hq["redirect_uri"] == ["https://app.exemple/github"]
+    assert gq["code_challenge_method"] == ["S256"] and gq["code_challenge"]
+    assert hq["code_challenge_method"] == ["S256"] and hq["code_challenge"]
+    assert gq["state"][0].startswith("ggl.")
+    assert hq["state"][0].startswith("gh.")
+
+    premier_g, premier_h = at.session_state["g"], at.session_state["h"]
+    at.run()  # un nouveau rendu réutilise le même lien (état encore valide)
+    assert at.session_state["g"] == premier_g
+    assert at.session_state["h"] == premier_h
+
+
+SCRIPT_RETOUR_OAUTH = '''
+from app import auth_basique as a
+a._traiter_callback_oauth()
+'''
+
+SCRIPT_FERMETURE_OAUTH = '''
+from app import auth_basique as a
+import streamlit as st
+a._traiter_callback_oauth()
+if a.est_fenetre_oauth():
+    a.afficher_fermeture_oauth()
+    st.session_state["page"] = "fermeture"
+    st.stop()
+st.session_state["page"] = "accueil"
+'''
+
+
+def test_retour_oauth_attend_le_cookie_de_session(appli, oauth_configure, monkeypatch):
+    from streamlit.testing.v1 import AppTest
+    from app import auth_basique, identite
+
+    db, jeton = appli
+    recus = []
+
+    def echanger(code, redirect, code_verifier=""):
+        recus.append((code, redirect, code_verifier))
+        return {"google_id": "g-1", "email": "eleve@exemple.com", "name": "Élève"}, "ok"
+
+    monkeypatch.setattr(auth_basique, "echanger_code_google", echanger)
+    state = "ggl.etat-test"
+    db.enregistrer_etat_oauth(state, "google", jeton, pkce_verifier="verif-ggl")
+
+    at = AppTest.from_string(SCRIPT_RETOUR_OAUTH, default_timeout=30)
+    at.query_params["code"] = "code-google"
+    at.query_params["state"] = state
+    at.session_state["_jeton_session"] = "jeton-provisoire-nouvel-onglet"
+    at.session_state["_jeton_provisoire"] = True
+    at.run()
+    assert not at.exception, at.exception
+    assert recus == [] and at.query_params.get("code")  # rien de consommé avant le cookie
+
+    at.session_state["_jeton_session"] = jeton  # cookie lu : session d'origine
+    at.session_state["_jeton_provisoire"] = False
+    at.run()
+    assert not at.exception, at.exception
+    assert recus == [("code-google", "https://app.exemple/google", "verif-ggl")]
+    assert any(u.get("tier") == "google" for u in db.lister_users())
+    assert at.session_state[identite.CLE_OAUTH_SIGNAL] == "ok"
+    assert at.session_state["_oauth_fenetre"] is True
+
+
+def test_annulation_oauth_ne_cree_pas_de_session(appli, oauth_configure):
+    from streamlit.testing.v1 import AppTest
+    from app import identite
+
+    db, jeton = appli
+    at = AppTest.from_string(SCRIPT_RETOUR_OAUTH, default_timeout=30)
+    at.query_params["error"] = "access_denied"
+    at.query_params["state"] = "ggl.annule"
+    at.session_state["_jeton_session"] = jeton
+    at.session_state["_jeton_provisoire"] = False
+    at.run()
+    assert not at.exception, at.exception
+    assert at.session_state[identite.CLE_OAUTH_SIGNAL] == "annule"
+    assert at.session_state["_oauth_fenetre"] is True
+    assert not any(u.get("tier") == "google" for u in db.lister_users())
+
+
+def test_fenetre_oauth_ne_charge_pas_l_accueil(appli, oauth_configure):
+    from streamlit.testing.v1 import AppTest
+
+    _, jeton = appli
+    at = AppTest.from_string(SCRIPT_FERMETURE_OAUTH, default_timeout=30)
+    at.query_params["error"] = "access_denied"
+    at.query_params["state"] = "ggl.x"
+    at.session_state["_jeton_session"] = jeton
+    at.session_state["_jeton_provisoire"] = False
+    at.run()
+    assert not at.exception, at.exception
+    assert at.session_state["page"] == "fermeture"
+    assert at.session_state["_oauth_fenetre"] is True
+
+    principal = AppTest.from_string(SCRIPT_FERMETURE_OAUTH, default_timeout=30)
+    principal.session_state["_jeton_session"] = jeton
+    principal.session_state["_jeton_provisoire"] = False
+    principal.run()
+    assert not principal.exception, principal.exception
+    assert principal.session_state["page"] == "accueil"

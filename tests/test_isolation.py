@@ -418,6 +418,16 @@ def test_session_confirmee_non_remplacee_par_un_autre_cookie(bases):
     assert user["id"] == a["id"] and jeton == jeton_a
 
 
+def test_onglet_principal_adopte_le_cookie_apres_oauth(bases):
+    """L'onglet d'origine retrouve le compte quand l'invité a été révoqué par la fenêtre OAuth."""
+    users, _, _ = bases
+    invite, jeton_invite = _navigateur(users)
+    compte = users.upsert_github("99", "alice")
+    jeton_compte = ouvrir_session_compte(users, compte, jeton_invite)
+    user, jeton, _ = choisir_session(users, jeton_invite, False, jeton_compte, True)
+    assert user["id"] == compte["id"] and jeton == jeton_compte
+
+
 def test_identite_statut():
     assert Identite("u", "guest", "").est_invitee
     assert Identite("u", "github", "x").est_authentifiee

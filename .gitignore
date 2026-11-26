@@ -8,10 +8,6 @@ venv/
 .venv/
 ENV/
 build/
-.idea/
-cache_huggingface/
-resultats/
-develop-eggs/
 dist/
 downloads/
 eggs/
@@ -25,27 +21,64 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-.env
-.env.local
-models_cache/
+develop-eggs/
 
-# Jupyter Notebook
+# Secrets / env
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Caches outils
+.idea/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+cache_huggingface/
+models_cache/
+src/models_cache/
+resultats/
+
+# Temporaires
+*.log
+*.tmp
+*.bak
+*.swp
+*~
+
+# Jupyter
 .ipynb_checkpoints
 
-# Data (trop volumineux pour GitHub)
+# Data (trop volumineux pour GitHub / Cloud)
 data/raw/
 data/processed/
 data/embeddings/
 data/app/
-
-# Results
-resultats/
 
 # Logs d'amélioration
 logs/
 
 # IDE
 .vscode/
+.cursor/
+.claude/
+
+# Présoutenance : aperçus et anciennes versions locales
+_preview*/
+_archives/
+
+# Livrables académiques (hors runtime Streamlit Cloud)
+Mémoire-Master.docx
+Pres-soutenance.pptx
+
+# Figures HTML / dumps debug (hors runtime)
+docs/figures_chap4/*.html
+docs/figures_chap4/debug_*.png
+docs/figures_chap4/eda_resume_pour_claude.md
+src/evaluation/_test_ragas_debug.py
 
 # OS
 .DS_Store

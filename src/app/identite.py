@@ -120,22 +120,140 @@ def fermer_session(db: UtilisateursSQLite, jeton: Optional[str]) -> Tuple[Dict[s
 # ── Intégration Streamlit ────────────────────────────────────────────────────
 
 CLE_COMPOSANT = "_assistdoc_cookie"
+CLE_OAUTH_SIGNAL = "_oauth_signal"
 
-# Composant v2 (non isolé dans une iframe) : lit le cookie du document de l'application,
-# le transmet au serveur, et écrit le jeton confirmé. Aucun rechargement de page.
+# Composant v2 (JS non isolé) : cookie de session + signal OAuth inter-fenêtres.
+# Google coupe window.opener (COOP) : BroadcastChannel / localStorage restent valides.
+# Le message ne contient jamais de jeton ; le serveur reste la seule source de vérité.
 _JS_COOKIE = """
 export default function(component) {
-  const { data, setStateValue } = component;
+  const { data, setStateValue, setTriggerValue } = component;
+  const SOURCE = "assistdoc-oauth";
+  const CANAL = "assistdoc-oauth";
+  const TYPES = { ok: 1, erreur: 1, annule: 1 };
+  const INTERDITS = ["token","access_token","refresh_token","id_token","code","secret","client_secret","code_verifier"];
+
   const lire = () => {
     const m = document.cookie.match(/(?:^|; )assistdoc_sid=([^;]*)/);
     return m ? decodeURIComponent(m[1]) : "";
   };
-  if (data && data.nouveau) {
-    const secure = window.location.protocol === "https:" ? "; Secure" : "";
-    document.cookie = "assistdoc_sid=" + encodeURIComponent(data.nouveau)
-      + "; Max-Age=" + data.age + "; Path=/; SameSite=Lax" + secure;
+  const messageOk = (origine, payload) => {
+    if (origine !== window.location.origin) return false;
+    if (!payload || payload.source !== SOURCE || !TYPES[payload.type]) return false;
+    for (const champ of INTERDITS) { if (payload[champ]) return false; }
+    return true;
+  };
+  const diffuser = (type) => {
+    const payload = { source: SOURCE, type: type };
+    try { const ch = new BroadcastChannel(CANAL); ch.postMessage(payload); ch.close(); } catch (e) {}
+    try {
+      if (window.opener && !window.opener.closed) {
+        window.opener.postMessage(payload, window.location.origin);
+      }
+    } catch (e) {}
+    try {
+      localStorage.setItem(CANAL, JSON.stringify({ source: SOURCE, type: type, t: Date.now() }));
+      localStorage.removeItem(CANAL);
+    } catch (e) {}
+  };
+  const fermerFenetre = () => {
+    try { window.close(); } catch (e) {}
+    try { if (window.top && window.top !== window) window.top.close(); } catch (e) {}
+  };
+  const relireEtSignaler = (type) => {
+    setStateValue("cookie", lire());
+    setTriggerValue("oauth_maj", type);
+  };
+
+  const q = window.location.search || "";
+  if (q.indexOf("code=") >= 0 || q.indexOf("state=") >= 0 || q.indexOf("error=") >= 0) {
+    try { window.name = "assistdoc-oauth"; } catch (e) {}
   }
-  setStateValue("cookie", lire());
+
+  if (data && data.nouveau) {
+    const existant = lire();
+    if (data.forcer || !existant || existant === data.nouveau) {
+      const secure = window.location.protocol === "https:" ? "; Secure" : "";
+      document.cookie = "assistdoc_sid=" + encodeURIComponent(data.nouveau)
+        + "; Max-Age=" + data.age + "; Path=/; SameSite=Lax" + secure;
+    } else {
+      setStateValue("cookie", existant);
+      setTriggerValue("oauth_maj", "ok");
+    }
+  }
+  if (data && data.oauth_signal && TYPES[data.oauth_signal]) {
+    diffuser(data.oauth_signal);
+    fermerFenetre();
+    setTimeout(fermerFenetre, 50);
+    setTimeout(fermerFenetre, 400);
+  }
+  let actuel = lire();
+  setStateValue("cookie", actuel);
+
+  const urlOAuthOk = (u) => {
+    try {
+      const x = new URL(u, window.location.origin);
+      if (x.protocol !== "https:") return false;
+      if (x.host === "accounts.google.com" && x.pathname.indexOf("/o/oauth2/") === 0) return true;
+      if (x.host === "github.com" && x.pathname === "/login/oauth/authorize") return true;
+    } catch (e) {}
+    return false;
+  };
+  const onClickOAuth = (ev) => {
+    const chemin = ev.composedPath ? ev.composedPath() : [];
+    const a = chemin.find((n) => n && n.tagName === "A" && n.href)
+      || (ev.target && ev.target.closest ? ev.target.closest("a[href]") : null);
+    if (!a) return;
+    const href = a.href || a.getAttribute("href") || "";
+    if (!urlOAuthOk(href)) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const popup = window.open(href, "assistdoc-oauth", "width=520,height=720,scrollbars=yes");
+    if (!popup) {
+      setTriggerValue("oauth_ui", "popup_bloque");
+      return;
+    }
+    try { popup.focus(); } catch (e) {}
+  };
+  document.addEventListener("click", onClickOAuth, true);
+
+  const onMessage = (ev) => {
+    if (!messageOk(ev.origin, ev.data)) return;
+    relireEtSignaler(ev.data.type);
+  };
+  window.addEventListener("message", onMessage);
+  let canal = null;
+  try {
+    canal = new BroadcastChannel(CANAL);
+    canal.onmessage = (ev) => {
+      if (!messageOk(window.location.origin, ev.data)) return;
+      relireEtSignaler(ev.data.type);
+    };
+  } catch (e) {}
+  const onStorage = (ev) => {
+    if (ev.key !== CANAL || !ev.newValue) return;
+    try {
+      const payload = JSON.parse(ev.newValue);
+      if (!messageOk(window.location.origin, payload)) return;
+      relireEtSignaler(payload.type);
+    } catch (e) {}
+  };
+  window.addEventListener("storage", onStorage);
+  const iv = setInterval(() => {
+    const v = lire();
+    if (v !== actuel) {
+      actuel = v;
+      setStateValue("cookie", v);
+      setTriggerValue("oauth_maj", "ok");
+    }
+  }, 800);
+  return () => {
+    window.removeEventListener("message", onMessage);
+    window.removeEventListener("storage", onStorage);
+    document.removeEventListener("click", onClickOAuth, true);
+    clearInterval(iv);
+    if (canal) canal.close();
+  };
 }
 """
 
@@ -148,11 +266,14 @@ def _st():
     return st
 
 
+SCHEMA_SESSIONS = 3  # incrémenter pour forcer une nouvelle instance (migration SQLite)
+
+
 def users_db() -> UtilisateursSQLite:
     st = _st()
 
     @st.cache_resource
-    def _instance() -> UtilisateursSQLite:
+    def _instance(_schema: int = SCHEMA_SESSIONS) -> UtilisateursSQLite:
         return UtilisateursSQLite()
 
     return _instance()
@@ -222,25 +343,53 @@ def identite_session() -> Identite:
 def connecter(user: Dict[str, Any]) -> Identite:
     st = _st()
     jeton = ouvrir_session_compte(users_db(), user, st.session_state.get("_jeton_session"))
-    return _appliquer(user, jeton)
+    ident = _appliquer(user, jeton)
+    st.session_state["_cookie_forcer"] = True
+    return ident
 
 
 def deconnecter() -> Identite:
     st = _st()
     invite, jeton = fermer_session(users_db(), st.session_state.get("_jeton_session"))
-    return _appliquer(invite, jeton)
+    ident = _appliquer(invite, jeton)
+    st.session_state["_cookie_forcer"] = True
+    return ident
 
 
 def jeton_session_courant() -> Optional[str]:
     return _st().session_state.get("_jeton_session")
 
 
-def synchroniser_cookie() -> None:
-    """À appeler une fois par run, après identite_courante()."""
+def signaler_oauth(type_signal: str) -> None:
+    """Demande au composant cookie d'avertir l'onglet principal (après décision serveur)."""
+    if type_signal in {"ok", "erreur", "annule"}:
+        _st().session_state[CLE_OAUTH_SIGNAL] = type_signal
+
+
+def synchroniser_cookie() -> Any:
+    """À appeler une fois par run, après identite_courante().
+
+    Relit le cookie, écrit le jeton confirmé, et — après un callback OAuth —
+    prévient l'onglet principal puis tente de fermer la fenêtre secondaire.
+    """
     global _composant_cookie
     st = _st()
     if _composant_cookie is None:
         _composant_cookie = st.components.v2.component("assistdoc_session", js=_JS_COOKIE)
     a_ecrire = st.session_state.get("_cookie_a_ecrire")
-    data = {"nouveau": a_ecrire[0], "age": a_ecrire[1]} if a_ecrire else {}
-    _composant_cookie(key=CLE_COMPOSANT, data=data, on_cookie_change=lambda: None)
+    data: Dict[str, Any] = {}
+    if a_ecrire:
+        data["nouveau"] = a_ecrire[0]
+        data["age"] = a_ecrire[1]
+        if st.session_state.pop("_cookie_forcer", None):
+            data["forcer"] = True
+    signal = st.session_state.pop(CLE_OAUTH_SIGNAL, None)
+    if signal:
+        data["oauth_signal"] = signal
+    return _composant_cookie(
+        key=CLE_COMPOSANT,
+        data=data,
+        on_cookie_change=lambda: None,
+        on_oauth_maj_change=lambda: None,
+        on_oauth_ui_change=lambda: None,
+    )
