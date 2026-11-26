@@ -82,19 +82,17 @@ def test_edit_form_recupere_nouvelle_valeur_et_tronque(at):
 
     # Simule la saisie utilisateur dans le widget form (état Streamlit réel)
     app.session_state["inline_edit_user_0"] = "Bonjour, explique-moi SQLAlchemy"
-    # Soumet le formulaire via le bouton Envoyer (index 1 : Annuler=0, Envoyer=1)
-    submits = list(app.button) + list(getattr(app, "form_submit_button", lambda: [])() or [])
-    # AppTest expose form_submit_button
-    envoyer = None
-    for b in app.button:
-        if "Envoyer" in (b.label or ""):
-            envoyer = b
-            break
-    if envoyer is None and hasattr(app, "form_submit_button"):
-        for b in app.form_submit_button:
-            if "Envoyer" in (getattr(b, "label", None) or ""):
-                envoyer = b
-                break
+    # Streamlit AppTest (≥1.58) expose st.form_submit_button via app.button
+    # (clés FormSubmitter:<form_id>-<label>), pas via un attribut form_submit_button.
+    envoyer = next(
+        (
+            b
+            for b in app.button
+            if (b.label or "") == "Envoyer"
+            or (getattr(b, "key", None) or "").endswith("-Envoyer")
+        ),
+        None,
+    )
     assert envoyer is not None, "bouton Envoyer introuvable"
     envoyer.click().run()
 
